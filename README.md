@@ -16,7 +16,7 @@ genome editing tasks, including:
 - Edit outcome prediction (indels, base edits, prime edits)
 - QC and downstream analysis
 
-The goal is to streamline work across laboratories and software projects by providing well-tested core primitives (targets, guides, nuclease constraints, genomic intervals, and edit outcomes), interoperable file I/O, and pluggable computational backends.
+The goal is to streamline work across laboratories and software projects by providing well-tested core primitives (targets, guides, nuclease constraints, genomic intervals, and edit outcomes).
 
 # Install
 ```
