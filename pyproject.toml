@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=80.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geneops"
+version = "0.0.1"
+description = "Unified Python toolkit for genome editing (CRISPR/prime/base): design, off-target scoring, QC, and analysis."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = { text = "Apache-2.0" }
+authors = [
+    {name = "Nathan Fargo", email = "ntfargo@proton.me"},
+]
+keywords = [
+    "bioinformatics",
+    "genomics",
+    "genome-editing",
+    "CRISPR",
+    "base-editing",
+    "prime-editing",
+    "guide-RNA",
+    "off-target",
+    "Cas9",
+    "nuclease",
+    "gRNA-design",
+    "indel-prediction",
+    "PAM",
+    "deep-learning",
+    "machine-learning",
+    "python"
+]
+
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Unix",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS :: MacOS X",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Backend",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
+]
+
+dependencies = [
+    "numpy>=1.25.0"
+]
+
+[project.urls]
+Homepage = "https://linearfox.com"
+Repository = "https://github.com/ntfargo/geneops"
