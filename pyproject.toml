@@ -7,7 +7,7 @@ name = "geneops"
 version = "0.0.1"
 description = "Unified Python toolkit for genome editing (CRISPR/prime/base): design, off-target scoring, QC, and analysis."
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12,<3.14"
 license = { text = "Apache-2.0" }
 authors = [
     {name = "Nathan Fargo", email = "ntfargo@proton.me"},
@@ -43,14 +43,22 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Backend",
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14"
 ]
 
 dependencies = [
-    "numpy>=2.4.1"
+    "numpy<2.3.0,>=2",
+    "pytest>=9.0.2",
+
 ]
 
 [project.urls]
 Homepage = "https://linearfox.com"
 Repository = "https://github.com/ntfargo/geneops"
+
+[tool.setuptools]
+py-modules = []
+packages = ["geneops", "geneops.utils"]
+package-dir = {"geneops" = "src"}

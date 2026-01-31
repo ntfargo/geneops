@@ -8,3 +8,19 @@
 """geneops src base"""
 
 __version__ = "0.0.1"
+
+from .nuclease import (
+    Nuclease,
+    RRegistry,
+    get_nuclease,
+    list_nucleases,
+    register_nuclease,
+)
+
+__all__ = [
+    "Nuclease",
+    "RRegistry",
+    "get_nuclease",
+    "list_nucleases",
+    "register_nuclease",
+]
