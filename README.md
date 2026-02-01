@@ -26,4 +26,6 @@ source venv/bin/activate
 pip install -e .
 ```
 
+Contributions are welcome! Please open issues or pull requests on the GitHub repository.
+
 Contact: ntfargo@proton.me
