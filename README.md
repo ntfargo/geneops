@@ -15,9 +15,7 @@ genome editing tasks, including:
 - Nuclease and PAM constraint modeling
 - Edit outcome prediction (indels, base edits, prime edits)
 - QC and downstream analysis
-
-The goal is to streamline work across laboratories and software projects by providing well-tested core primitives (targets, guides, nuclease constraints, genomic intervals, and edit outcomes).
-
+ 
 # Install
 ```
 # Create virtual env
