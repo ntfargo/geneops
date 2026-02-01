@@ -32,3 +32,28 @@ def test_get_unknown_raises():
     registry = RRegistry()
     with pytest.raises(KeyError):
         registry.get_nuclease("Unknown")
+
+# Example.
+print("Supported nucleases:")
+for name in list_nucleases():
+    print(f"  - {name}")
+
+spcas9 = get_nuclease("spcas9")
+
+print("\nRetrieved nuclease:")
+print(f"Name       : {spcas9.name}")
+print(f"PAM        : {spcas9.pam}")
+print(f"Nickase    : {spcas9.nickase}")
+print(f"Description: {spcas9.description}")
+
+custom = Nuclease(
+    name="MyCas9",
+    pam="NGA",
+    description="Custom engineered Cas9 variant",
+)
+
+register_nuclease(custom)
+
+mycas9 = get_nuclease("mycas9")
+print("\nCustom nuclease registered:")
+print(f"{mycas9.name} recognizes PAM {mycas9.pam}")
