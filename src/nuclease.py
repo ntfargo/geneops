@@ -206,7 +206,7 @@ _DEFAULT_NUCLEASES = (
     ),
     Nuclease(
         name="CjCas9",
-        pam=PAM("NNNVRYAC", "3'"),
+        pam=PAM("NNNNRYAC", "3'"),
         description="Campylobacter jejuni Cas9",
     ),
 
