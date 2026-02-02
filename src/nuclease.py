@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Literal
 
+# IUPAC nucleotide codes mapping
 IUPAC: Dict[str, set[str]] = {
     "A": {"A"},
     "C": {"C"},
@@ -35,6 +36,31 @@ IUPAC: Dict[str, set[str]] = {
     "V": {"A", "C", "G"},
 }
 
+def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
+    """Determine PAM orientation for a nuclease."""
+    # Forward reference - will be resolved at runtime
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    name_lower = nuclease.name.lower()
+    
+    # Cas12 family (Cpf1) has 5' PAM
+    if 'cas12' in name_lower or 'cpf1' in name_lower:
+        return "5'"
+    
+    # Cas9 family and most others have 3' PAM
+    return "3'"
+
+
+def matches_pam(seq: str, pam: str) -> bool:
+    """Check if a sequence matches a PAM pattern (IUPAC-aware)."""
+    return PAM(pam, "3'").matches(seq)
+
+
+def find_pam_sites(seq: str, pam: str) -> List[int]:
+    """Locate all PAM site indices in a sequence."""
+    return PAM(pam, "3'").find_sites(seq)
+
 @dataclass(frozen=True, slots=True)
 class PAM:
     """PAM sequence pattern with IUPAC-aware matching."""
@@ -50,6 +76,7 @@ class PAM:
         if isinstance(other, str):
             return self.pattern == other
         return super().__eq__(other)
+    
     def matches(self, seq: str) -> bool:
         """Check if a sequence matches this PAM pattern."""
         if len(seq) != len(self.pattern):
@@ -60,6 +87,7 @@ class PAM:
             base in IUPAC[p]
             for base, p in zip(seq.upper(), self.pattern.upper())
         )
+    
     def find_sites(self, seq: str) -> List[int]:
         """Locate all PAM site indices in a sequence."""
         pam_len = len(self.pattern)
@@ -71,7 +99,6 @@ class PAM:
             if self.matches(candidate):
                 sites.append(i)
         return sites
-
 
 @dataclass(frozen=True, slots=True)
 class Nuclease:
@@ -94,30 +121,6 @@ class Nuclease:
     def matches_pam(self, seq: str) -> bool:
         """Return True if seq matches this nuclease's PAM."""
         return self.get_pam().matches(seq)
-
-# --- PAM utility functions ---
-def matches_pam(seq: str, pam: str) -> bool:
-    """Check if a sequence matches a PAM pattern (IUPAC-aware)."""
-    return PAM(pam, "3'").matches(seq)
-
-def find_pam_sites(seq: str, pam: str) -> List[int]:
-    """Locate all PAM site indices in a sequence."""
-    return PAM(pam, "3'").find_sites(seq)
-
-def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
-    """Determine PAM orientation for a nuclease."""
-    # Forward reference - will be resolved at runtime
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    
-    name_lower = nuclease.name.lower()
-    
-    # Cas12 family (Cpf1) has 5' PAM
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return "5'"
-    
-    # Cas9 family and most others have 3' PAM
-    return "3'"
 
 class RRegistry:
     """Registry for known nucleases."""
@@ -221,14 +224,16 @@ _DEFAULT_NUCLEASES = (
 )
 
 DEFAULT_REGISTRY = RRegistry(_DEFAULT_NUCLEASES)
- 
+
 def register_nuclease(nuclease: Nuclease) -> None:
     """Register a user-defined nuclease in the default registry."""
     DEFAULT_REGISTRY.register_nuclease(nuclease)
 
+
 def get_nuclease(name: str) -> Nuclease:
     """Retrieve a known nuclease definition from the default registry."""
     return DEFAULT_REGISTRY.get_nuclease(name)
+
 
 def list_nucleases() -> List[str]:
     """Enumerate supported nucleases from the default registry."""
