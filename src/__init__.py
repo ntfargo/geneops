@@ -22,6 +22,10 @@ from .nuclease import (
     get_nuclease,
     list_nucleases,
     register_nuclease,
+    cut_position,
+    cut_offset,
+    produces_blunt_cut,
+    overhang_length,
 )
 
 __all__ = [
@@ -30,4 +34,8 @@ __all__ = [
     "get_nuclease",
     "list_nucleases",
     "register_nuclease",
+    "cut_position",
+    "cut_offset",
+    "produces_blunt_cut",
+    "overhang_length",
 ]

@@ -52,14 +52,15 @@ def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
     return "3'"
 
 
-def matches_pam(seq: str, pam: str) -> bool:
-    """Check if a sequence matches a PAM pattern (IUPAC-aware)."""
-    return PAM(pam, "3'").matches(seq)
+def matches_pam(seq: str, pam: PAM | str, orientation: Literal["3'", "5'"] = "3'") -> bool:
+    if isinstance(pam, str):
+        pam = PAM(pam, orientation)
+    return pam.matches(seq)
 
-
-def find_pam_sites(seq: str, pam: str) -> List[int]:
-    """Locate all PAM site indices in a sequence."""
-    return PAM(pam, "3'").find_sites(seq)
+def find_pam_sites(seq: str, pam: PAM | str, orientation: Literal["3'", "5'"] = "3'") -> List[int]:
+    if isinstance(pam, str):
+        pam = PAM(pam, orientation)
+    return pam.find_sites(seq)
 
 @dataclass(frozen=True, slots=True)
 class PAM:
@@ -238,3 +239,80 @@ def get_nuclease(name: str) -> Nuclease:
 def list_nucleases() -> List[str]:
     """Enumerate supported nucleases from the default registry."""
     return DEFAULT_REGISTRY.list_nucleases()
+
+def cut_offset(nuclease: Nuclease | str) -> int:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    name_lower = nuclease.name.lower()
+    
+    # Cas12 family cuts downstream of PAM (in the protospacer)
+    if 'cas12' in name_lower or 'cpf1' in name_lower:
+        return 18  # Typical Cas12a cut position
+    
+    # Cas9 family cuts 3bp upstream of PAM (between protospacer and PAM)
+    return -3
+
+
+def produces_blunt_cut(nuclease: Nuclease | str) -> bool:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    name_lower = nuclease.name.lower()
+    
+    # Cas12 family produces staggered cuts
+    if 'cas12' in name_lower or 'cpf1' in name_lower:
+        return False
+    
+    # Cas9 family produces blunt cuts
+    return True
+
+
+def overhang_length(nuclease: Nuclease | str) -> int:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    name_lower = nuclease.name.lower()
+    
+    # Cas12 family produces 5nt 5' overhangs
+    if 'cas12' in name_lower or 'cpf1' in name_lower:
+        return 5
+    
+    # Cas9 produces blunt cuts (0 overhang)
+    return 0
+
+
+def cut_position(
+    pam_index: int, 
+    nuclease: Nuclease | str, 
+    strand: Literal["+", "-"] = "+"
+) -> int | tuple[int, int]:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    offset = cut_offset(nuclease)
+    orientation = pam_orientation(nuclease)
+    
+    # For 3' PAM (like Cas9): PAM is downstream, cut is upstream
+    if orientation == "3'":
+        if strand == "+":
+            cut_pos = pam_index + offset
+        else:
+            # Reverse strand: PAM position is at the end, adjust accordingly
+            pam_len = nuclease.pam_length()
+            cut_pos = pam_index + pam_len - offset
+    
+    # For 5' PAM (like Cas12a): PAM is upstream, cut is downstream
+    else:
+        if strand == "+":
+            pam_len = nuclease.pam_length()
+            cut_pos = pam_index + pam_len + offset
+        else:
+            cut_pos = pam_index - offset
+    
+    # Return single position or tuple depending on cut type
+    if produces_blunt_cut(nuclease):
+        return cut_pos
+    else:
+        overhang = overhang_length(nuclease)
+        return (cut_pos, cut_pos + overhang)
