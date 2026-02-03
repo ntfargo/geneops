@@ -7,7 +7,7 @@ name = "geneops"
 version = "0.0.1"
 description = "Unified Python toolkit for genome editing (CRISPR/prime/base): design, off-target scoring, QC, and analysis."
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
     {name = "Nathan Fargo", email = "ntfargo@proton.me"},
