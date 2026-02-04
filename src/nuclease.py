@@ -51,7 +51,6 @@ def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
     # Cas9 family and most others have 3' PAM
     return "3'"
 
-
 def matches_pam(seq: str, pam: PAM | str, orientation: Literal["3'", "5'"] = "3'") -> bool:
     if isinstance(pam, str):
         pam = PAM(pam, orientation)
@@ -105,6 +104,7 @@ class PAM:
 class Nuclease:
     name: str
     pam: PAM | str
+    spacer_length: int = 20
     nickase: bool = False
     description: str | None = None
 
@@ -156,11 +156,13 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SpCas9",
         pam=PAM("NGG", "3'"),
+        spacer_length=20,
         description="Streptococcus pyogenes Cas9",
     ),
     Nuclease(
         name="nCas9",
         pam=PAM("NGG", "3'"),
+        spacer_length=20,
         nickase=True,
         description="SpCas9 nickase variant (D10A/H840A)",
     ),
@@ -169,11 +171,13 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SpCas9-HF1",
         pam=PAM("NGG", "3'"),
+        spacer_length=20,
         description="High-fidelity SpCas9 variant",
     ),
     Nuclease(
         name="eSpCas9",
         pam=PAM("NGG", "3'"),
+        spacer_length=20,
         description="Enhanced-specificity SpCas9",
     ),
 
@@ -181,16 +185,19 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SpCas9-NG",
         pam=PAM("NG", "3'"),
+        spacer_length=20,
         description="SpCas9 variant recognizing NG PAMs",
     ),
     Nuclease(
         name="SpG",
         pam=PAM("NGN", "3'"),
+        spacer_length=20,
         description="Engineered SpCas9 with relaxed PAM",
     ),
     Nuclease(
         name="SpRY",
         pam=PAM("NRN", "3'"),
+        spacer_length=20,
         description="Near-PAMless SpCas9 variant (context-dependent efficiency)"
     ),
 
@@ -198,16 +205,19 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SaCas9",
         pam=PAM("NNGRRT", "3'"),
+        spacer_length=21,
         description="Staphylococcus aureus Cas9",
     ),
     Nuclease(
         name="NmCas9",
         pam=PAM("NNNNGATT", "3'"),
+        spacer_length=24,
         description="Neisseria meningitidis Cas9",
     ),
     Nuclease(
         name="CjCas9",
         pam=PAM("NNNNRYAC", "3'"),
+        spacer_length=22,
         description="Campylobacter jejuni Cas9",
     ),
 
@@ -215,11 +225,13 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="AsCas12a",
         pam=PAM("TTTV", "5'"),
+        spacer_length=23,
         description="Acidaminococcus Cas12a (Cpf1)",
     ),
     Nuclease(
         name="LbCas12a",
         pam=PAM("TTTV", "5'"),
+        spacer_length=23,
         description="Lachnospiraceae Cas12a (Cpf1)",
     ),
 )
@@ -316,3 +328,72 @@ def cut_position(
     else:
         overhang = overhang_length(nuclease)
         return (cut_pos, cut_pos + overhang)
+
+
+def guide_length(nuclease: Nuclease | str) -> int:
+    """Return the required guide length for a nuclease."""
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    return nuclease.spacer_length
+
+def is_guide_length_valid(guide: str, nuclease: Nuclease | str) -> bool:
+    """Check whether a guide sequence matches the required length for a nuclease."""
+    required_length = guide_length(nuclease)
+    return len(guide) == required_length
+
+def is_guide_compatible(
+    guide: str,
+    target: str,
+    nuclease: Nuclease | str
+) -> bool:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    
+    # Condition 1: Guide length must match nuclease requirement
+    if not is_guide_length_valid(guide, nuclease):
+        return False
+    
+    pam = nuclease.get_pam()
+    orientation = pam_orientation(nuclease)
+    pam_len = len(pam)
+    guide_len = len(guide)
+    target_upper = target.upper()
+    guide_upper = guide.upper()
+    
+    # For 3' PAM (Cas9): guide binds upstream of PAM on the target strand
+    # Target structure: [guide binding site][PAM]
+    if orientation == "3'":
+        # Check all positions where a PAM could exist
+        for i in range(len(target) - pam_len + 1):
+            pam_candidate = target_upper[i:i + pam_len]
+            if pam.matches(pam_candidate):
+                # Guide binding site is upstream of PAM
+                guide_start = i - guide_len
+                if guide_start >= 0:
+                    binding_site = target_upper[guide_start:i]
+                    # Guide binds to complementary strand, so check reverse complement
+                    if _reverse_complement(guide_upper) == binding_site:
+                        return True
+    
+    # For 5' PAM (Cas12): guide binds downstream of PAM on the target strand
+    # Target structure: [PAM][guide binding site]
+    else:
+        for i in range(len(target) - pam_len + 1):
+            pam_candidate = target_upper[i:i + pam_len]
+            if pam.matches(pam_candidate):
+                # Guide binding site is downstream of PAM
+                guide_start = i + pam_len
+                guide_end = guide_start + guide_len
+                if guide_end <= len(target):
+                    binding_site = target_upper[guide_start:guide_end]
+                    # Guide binds to complementary strand, so check reverse complement
+                    if _reverse_complement(guide_upper) == binding_site:
+                        return True
+    
+    return False
+
+def _reverse_complement(seq: str) -> str:
+    """Return the reverse complement of a DNA sequence."""
+    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+    return ''.join(complement.get(base, base) for base in reversed(seq))

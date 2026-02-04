@@ -9,6 +9,9 @@ from geneops.nuclease import (
     matches_pam,
     find_pam_sites,
     pam_orientation,
+    guide_length,
+    is_guide_length_valid,
+    is_guide_compatible,
 )
 
 # --- Registry tests ---
@@ -213,3 +216,133 @@ def test_pam_orientation_custom_nuclease():
     # Custom Cas12-like nuclease
     custom_cas12 = Nuclease(name="CustomCas12a", pam="TTTV")
     assert pam_orientation(custom_cas12) == "5'"
+
+def test_guide_length_cas9():
+    """Test that SpCas9 variants require 20nt guides."""
+    assert guide_length("SpCas9") == 20
+    assert guide_length("nCas9") == 20
+    assert guide_length("SpCas9-NG") == 20
+
+def test_guide_length_cas9_orthologs():
+    """Test that Cas9 orthologs have their specific spacer lengths."""
+    assert guide_length("SaCas9") == 21  # S. aureus Cas9
+    assert guide_length("NmCas9") == 24  # N. meningitidis Cas9
+    assert guide_length("CjCas9") == 22  # C. jejuni Cas9
+
+def test_guide_length_cas12a():
+    """Test that Cas12a variants require 23nt guides."""
+    assert guide_length("AsCas12a") == 23
+    assert guide_length("LbCas12a") == 23
+
+def test_guide_length_with_nuclease_object():
+    """Test guide_length with Nuclease object instead of string."""
+    cas9 = get_nuclease("SpCas9")
+    assert guide_length(cas9) == 20
+    
+    cas12a = get_nuclease("AsCas12a")
+    assert guide_length(cas12a) == 23
+
+def test_guide_length_custom_nuclease():
+    """Test guide_length with custom nuclease with explicit spacer_length."""
+    custom = Nuclease(name="CustomNuclease", pam="NGG", spacer_length=18)
+    assert guide_length(custom) == 18
+
+def test_is_guide_length_valid_cas9():
+    """Test guide length validation for Cas9."""
+    valid_guide = "A" * 20
+    short_guide = "A" * 19
+    long_guide = "A" * 21
+    
+    assert is_guide_length_valid(valid_guide, "SpCas9")
+    assert not is_guide_length_valid(short_guide, "SpCas9")
+    assert not is_guide_length_valid(long_guide, "SpCas9")
+
+def test_is_guide_length_valid_cas12a():
+    """Test guide length validation for Cas12a."""
+    valid_guide = "A" * 23
+    short_guide = "A" * 22
+    long_guide = "A" * 24
+    
+    assert is_guide_length_valid(valid_guide, "AsCas12a")
+    assert not is_guide_length_valid(short_guide, "AsCas12a")
+    assert not is_guide_length_valid(long_guide, "AsCas12a")
+
+def test_is_guide_length_valid_empty_guide():
+    """Test guide length validation with empty guide."""
+    assert not is_guide_length_valid("", "SpCas9")
+    assert not is_guide_length_valid("", "AsCas12a")
+
+def test_is_guide_compatible_cas9_valid():
+    """Test guide compatibility for Cas9 with valid guide and target."""
+    # SpCas9 has 3' PAM (NGG), guide binds upstream of PAM
+    # Target: [20nt binding site][NGG]
+    # Guide is reverse complement of binding site
+    guide = "ATCGATCGATCGATCGATCG"  # 20nt guide
+    # Reverse complement of guide: CGATCGATCGATCGATCGAT
+    # Target = binding_site + PAM
+    target = "CGATCGATCGATCGATCGATAGG"  # 20nt + NGG
+    
+    assert is_guide_compatible(guide, target, "SpCas9")
+
+def test_is_guide_compatible_cas9_wrong_length():
+    """Test guide compatibility fails with wrong guide length."""
+    guide = "ATCGATCGATCGATCGATC"  # 19nt (wrong length)
+    target = "CGATCGATCGATCGATCGATAGG"
+    
+    assert not is_guide_compatible(guide, target, "SpCas9")
+
+def test_is_guide_compatible_cas9_no_pam():
+    """Test guide compatibility fails without valid PAM."""
+    guide = "ATCGATCGATCGATCGATCG"  # 20nt
+    # Target has no valid PAM (NGG)
+    target = "CGATCGATCGATCGATCGATAAT"  # No NGG
+    
+    assert not is_guide_compatible(guide, target, "SpCas9")
+
+def test_is_guide_compatible_cas9_mismatched_guide():
+    """Test guide compatibility fails when guide doesn't match binding site."""
+    guide = "AAAAAAAAAAAAAAAAAAAA"  # 20nt guide
+    target = "CGATCGATCGATCGATCGATAGG"  # Different binding site
+    
+    assert not is_guide_compatible(guide, target, "SpCas9")
+
+def test_is_guide_compatible_cas12a_valid():
+    """Test guide compatibility for Cas12a with valid guide and target."""
+    # Cas12a has 5' PAM (TTTV), guide binds downstream of PAM
+    # Target: [TTTV][23nt binding site]
+    guide = "ATCGATCGATCGATCGATCGATC"  # 23nt guide
+    # Reverse complement of guide: GATCGATCGATCGATCGATCGAT
+    # Target = PAM + binding_site
+    target = "TTTAGATCGATCGATCGATCGATCGAT"  # TTTA + 23nt
+    
+    assert is_guide_compatible(guide, target, "AsCas12a")
+
+def test_is_guide_compatible_cas12a_wrong_length():
+    """Test guide compatibility fails for Cas12a with wrong guide length."""
+    guide = "ATCGATCGATCGATCGATCG"  # 20nt (wrong for Cas12a)
+    target = "TTTAGATCGATCGATCGATCGATCGAT"
+    
+    assert not is_guide_compatible(guide, target, "AsCas12a")
+
+def test_is_guide_compatible_cas12a_no_pam():
+    """Test guide compatibility fails for Cas12a without valid PAM."""
+    guide = "ATCGATCGATCGATCGATCGATC"  # 23nt
+    # TTTT is not a valid Cas12a PAM (V = A, C, G, not T)
+    target = "TTTTATCGATCGATCGATCGATCGAT"
+    
+    assert not is_guide_compatible(guide, target, "AsCas12a")
+
+def test_is_guide_compatible_case_insensitive():
+    """Test guide compatibility is case-insensitive."""
+    guide = "atcgatcgatcgatcgatcg"  # lowercase
+    target = "CGATCGATCGATCGATCGATAGG"  # uppercase
+    
+    assert is_guide_compatible(guide, target, "SpCas9")
+
+def test_is_guide_compatible_with_nuclease_object():
+    """Test guide compatibility with Nuclease object instead of string."""
+    cas9 = get_nuclease("SpCas9")
+    guide = "ATCGATCGATCGATCGATCG"
+    target = "CGATCGATCGATCGATCGATAGG"
+    
+    assert is_guide_compatible(guide, target, cas9)
