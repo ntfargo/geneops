@@ -36,6 +36,14 @@ IUPAC: Dict[str, set[str]] = {
     "V": {"A", "C", "G"},
 }
 
+def _reverse_complement(seq: str) -> str:
+    """Return the reverse complement of a DNA sequence."""
+    dict_sBases = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', 'U': 'U', 'n': '',
+                   '.': '.', '*': '*', 'a': 't', 'c': 'g', 'g': 'c', 't': 'a'}
+    list_sSeq = list(seq)
+    list_sSeq = [dict_sBases[sBase] for sBase in list_sSeq]
+    return ''.join(list_sSeq)[::-1]
+
 def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
     """Determine PAM orientation for a nuclease."""
     # Forward reference - will be resolved at runtime
@@ -393,7 +401,58 @@ def is_guide_compatible(
     
     return False
 
-def _reverse_complement(seq: str) -> str:
-    """Return the reverse complement of a DNA sequence."""
-    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
-    return ''.join(complement.get(base, base) for base in reversed(seq))
+def recognizes_strand(nuclease: Nuclease | str) -> Literal["+", "-", "both"]:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+
+    # All standard Cas9/Cas12 nucleases recognise PAM on both strands
+    return "both"
+
+def find_pam_sites_with_strand(seq, pam):
+    pam_len = len(pam)
+
+    for i in range(len(seq) - pam_len + 1):
+        if pam.matches(seq[i:i + pam_len]):
+            yield i, "+"
+
+    rc = _reverse_complement(seq)
+    for i in range(len(rc) - pam_len + 1):
+        if pam.matches(rc[i:i + pam_len]):
+            orig_pos = len(seq) - (i + pam_len)
+            yield orig_pos, "-"
+
+def binding_strand(
+    guide: str,
+    target: str,
+    nuclease: Nuclease | str,
+) -> Literal["+", "-"] | None:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+
+    pam = nuclease.get_pam()
+    orientation = pam_orientation(nuclease)
+    guide_rc = _reverse_complement(guide.upper())
+    target = target.upper()
+
+    for pam_pos, pam_strand in find_pam_sites_with_strand(target, pam):
+        bind_strand = "-" if pam_strand == "+" else "+"
+
+        if orientation == "3'":
+            start = pam_pos - len(guide)
+            end = pam_pos
+        else:
+            start = pam_pos + len(pam)
+            end = start + len(guide)
+
+        if start < 0 or end > len(target):
+            continue
+
+        protospacer = target[start:end]
+
+        if pam_strand == "-":
+            protospacer = _reverse_complement(protospacer)
+
+        if protospacer == guide_rc:
+            return bind_strand
+
+    return None

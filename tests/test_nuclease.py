@@ -8,11 +8,19 @@ from geneops.nuclease import (
     register_nuclease,
     matches_pam,
     find_pam_sites,
+    _reverse_complement,
     pam_orientation,
     guide_length,
     is_guide_length_valid,
     is_guide_compatible,
+    recognizes_strand,
+    find_pam_sites_with_strand,
+    binding_strand
 )
+
+@pytest.fixture
+def spcas9():
+    return get_nuclease("SpCas9")
 
 # --- Registry tests ---
 
@@ -346,3 +354,41 @@ def test_is_guide_compatible_with_nuclease_object():
     target = "CGATCGATCGATCGATCGATAGG"
     
     assert is_guide_compatible(guide, target, cas9)
+
+def test_find_pam_sites_forward_strand(spcas9):
+    seq = "AAACCCGGGTTT"  # PAM = GGG at position 6
+    pam = spcas9.get_pam()
+
+    sites = list(find_pam_sites_with_strand(seq, pam))
+
+    assert (6, "+") in sites
+    assert all(pos >= 0 for pos, _ in sites)
+
+def test_find_pam_sites_reverse_strand_coordinate_mapping(spcas9):
+    # PAM exists only on reverse complement
+    seq = "CCCAAATTTCCC"
+    pam = spcas9.get_pam()
+
+    sites = list(find_pam_sites_with_strand(seq, pam))
+
+    # Ensure reverse-strand PAM is reported in original coordinates
+    assert any(strand == "-" for _, strand in sites)
+    for pos, strand in sites:
+        assert 0 <= pos < len(seq)
+
+def test_binding_strand_pam_on_plus(spcas9):
+    """
+    PAM on + strand → guide binds − strand
+    """
+    target = (
+        "AAAAA"
+        "TTTTTTTTTTTTTTTTTTTT"  # protospacer (20)
+        "AGG"                   # PAM
+        "AAAAA"
+    )
+
+    guide = _reverse_complement("TTTTTTTTTTTTTTTTTTTT")
+
+    strand = binding_strand(guide, target, spcas9)
+
+    assert strand == "-"
