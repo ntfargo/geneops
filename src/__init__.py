@@ -28,7 +28,17 @@ from .nuclease import (
     overhang_length,
 )
 
+from .guide import (
+    Guide,
+    normalize,
+    reverse_complement,
+    find_guides,
+    validate_guide_sequence,
+    guide_gc_content,
+)
+
 __all__ = [
+    # nuclease
     "Nuclease",
     "RRegistry",
     "get_nuclease",
@@ -38,4 +48,11 @@ __all__ = [
     "cut_offset",
     "produces_blunt_cut",
     "overhang_length",
+    # guide
+    "Guide",
+    "normalize",
+    "reverse_complement",
+    "find_guides",
+    "validate_guide_sequence",
+    "guide_gc_content",
 ]
