@@ -26,6 +26,14 @@ source venv/bin/activate
 pip install -e .
 ```
 
+## Map
+
+Overview of the current geneops architecture and how its core modules connect from guide design and nuclease modeling through edit outcome prediction and analysis. etc...
+
+![Map](assets/map.png)
+
+---
+
 Contributions are welcome! Please open issues or pull requests on the GitHub repository.
 
 Contact: ntfargo@proton.me
