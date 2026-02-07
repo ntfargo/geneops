@@ -18,6 +18,8 @@ from geneops.nuclease import (
     find_pam_sites_with_strand,
     binding_strand,
     validate_nuclease,
+    is_nickase,
+    nicking_offset,
 )
 
 @pytest.fixture
@@ -452,3 +454,57 @@ def test_validate_nuclease_all_default_nucleases_pass():
     for name in list_nucleases():
         nuc = get_nuclease(name)
         validate_nuclease(nuc)  # should not raise
+
+# --- is_nickase and nicking_offset tests ---
+
+def test_is_nickase_ncas9():
+    """nCas9 is a registered nickase."""
+    assert is_nickase("nCas9") is True
+
+def test_is_nickase_spcas9():
+    """Wild-type SpCas9 is NOT a nickase."""
+    assert is_nickase("SpCas9") is False
+
+def test_is_nickase_cas12a():
+    """AsCas12a is NOT a nickase."""
+    assert is_nickase("AsCas12a") is False
+
+def test_is_nickase_with_nuclease_object():
+    nuc = get_nuclease("nCas9")
+    assert is_nickase(nuc) is True
+
+    nuc2 = get_nuclease("SpCas9")
+    assert is_nickase(nuc2) is False
+
+def test_is_nickase_custom_nickase():
+    custom = Nuclease(name="MyNickase", pam="NGG", nickase=True)
+    assert is_nickase(custom) is True
+
+def test_is_nickase_custom_full_nuclease():
+    custom = Nuclease(name="MyNuclease", pam="NGG", nickase=False)
+    assert is_nickase(custom) is False
+
+def test_nicking_offset_ncas9():
+    """Cas9 nickase nicks at -3 relative to PAM."""
+    assert nicking_offset("nCas9") == -3
+
+def test_nicking_offset_with_nuclease_object():
+    nuc = get_nuclease("nCas9")
+    assert nicking_offset(nuc) == -3
+
+def test_nicking_offset_custom_cas9_nickase():
+    custom = Nuclease(name="D10A-Cas9", pam="NGG", nickase=True)
+    assert nicking_offset(custom) == -3
+
+def test_nicking_offset_custom_cas12_nickase():
+    custom = Nuclease(name="nCas12a", pam="TTTV", nickase=True)
+    assert nicking_offset(custom) == 18
+
+def test_nicking_offset_raises_for_full_nuclease():
+    """nicking_offset must raise ValueError for non-nickase nucleases."""
+    with pytest.raises(ValueError, match="not a nickase"):
+        nicking_offset("SpCas9")
+
+def test_nicking_offset_raises_for_cas12a():
+    with pytest.raises(ValueError, match="not a nickase"):
+        nicking_offset("AsCas12a")

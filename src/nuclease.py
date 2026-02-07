@@ -260,6 +260,30 @@ def list_nucleases() -> List[str]:
     """Enumerate supported nucleases from the default registry."""
     return DEFAULT_REGISTRY.list_nucleases()
 
+def is_nickase(nuclease: Nuclease | str) -> bool:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    return nuclease.nickase
+
+def nicking_offset(nuclease: Nuclease | str) -> int:
+    if isinstance(nuclease, str):
+        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+
+    if not nuclease.nickase:
+        raise ValueError(
+            f"{nuclease.name} is not a nickase; use cut_offset() for "
+            f"double-strand nucleases"
+        )
+
+    name_lower = nuclease.name.lower()
+
+    # Cas12-family nickase
+    if 'cas12' in name_lower or 'cpf1' in name_lower:
+        return 18
+
+    # Cas9-family nickase (D10A / H840A) – nick at −3 from PAM
+    return -3
+
 def cut_offset(nuclease: Nuclease | str) -> int:
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
