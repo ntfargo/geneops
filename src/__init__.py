@@ -26,6 +26,7 @@ from .nuclease import (
     cut_offset,
     produces_blunt_cut,
     overhang_length,
+    validate_nuclease,
 )
 
 from .guide import (
@@ -48,6 +49,7 @@ __all__ = [
     "cut_offset",
     "produces_blunt_cut",
     "overhang_length",
+    "validate_nuclease",
     # guide
     "Guide",
     "normalize",

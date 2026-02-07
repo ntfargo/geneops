@@ -2,6 +2,7 @@ import pytest
 
 from geneops.nuclease import (
     Nuclease,
+    PAM,
     RRegistry,
     get_nuclease,
     list_nucleases,
@@ -15,7 +16,8 @@ from geneops.nuclease import (
     is_guide_compatible,
     recognizes_strand,
     find_pam_sites_with_strand,
-    binding_strand
+    binding_strand,
+    validate_nuclease,
 )
 
 @pytest.fixture
@@ -392,3 +394,61 @@ def test_binding_strand_pam_on_plus(spcas9):
     strand = binding_strand(guide, target, spcas9)
 
     assert strand == "-"
+
+def test_validate_nuclease_accepts_valid_cas9():
+    """Valid default nucleases pass validation without errors."""
+    cas9 = get_nuclease("SpCas9")
+    validate_nuclease(cas9)  # should not raise
+
+def test_validate_nuclease_accepts_valid_cas12a():
+    cas12a = get_nuclease("AsCas12a")
+    validate_nuclease(cas12a)  # should not raise
+
+def test_validate_nuclease_accepts_custom_nuclease():
+    custom = Nuclease(name="TestNuc", pam=PAM("NGG", "3'"), spacer_length=20)
+    validate_nuclease(custom)
+
+def test_validate_nuclease_accepts_string_pam():
+    """Nuclease with a plain string PAM should also pass."""
+    nuc = Nuclease(name="PlainPAM", pam="NGG", spacer_length=20)
+    validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_non_nuclease():
+    with pytest.raises(TypeError, match="Expected a Nuclease"):
+        validate_nuclease("SpCas9")
+
+def test_validate_nuclease_rejects_empty_name():
+    nuc = Nuclease(name="", pam="NGG", spacer_length=20)
+    with pytest.raises(ValueError, match="name must be a non-empty"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_whitespace_name():
+    nuc = Nuclease(name="   ", pam="NGG", spacer_length=20)
+    with pytest.raises(ValueError, match="name must be a non-empty"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_invalid_iupac_pam():
+    nuc = Nuclease(name="BadPAM", pam=PAM("XZQ", "3'"), spacer_length=20)
+    with pytest.raises(ValueError, match="invalid IUPAC"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_empty_pam():
+    nuc = Nuclease(name="EmptyPAM", pam="", spacer_length=20)
+    with pytest.raises(ValueError, match="PAM pattern must not be empty"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_short_spacer():
+    nuc = Nuclease(name="TooShort", pam="NGG", spacer_length=10)
+    with pytest.raises(ValueError, match="spacer_length"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_rejects_long_spacer():
+    nuc = Nuclease(name="TooLong", pam="NGG", spacer_length=35)
+    with pytest.raises(ValueError, match="spacer_length"):
+        validate_nuclease(nuc)
+
+def test_validate_nuclease_all_default_nucleases_pass():
+    """Every nuclease in the default registry should pass validation."""
+    for name in list_nucleases():
+        nuc = get_nuclease(name)
+        validate_nuclease(nuc)  # should not raise

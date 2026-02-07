@@ -278,6 +278,10 @@ def produces_blunt_cut(nuclease: Nuclease | str) -> bool:
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
     
+    # Nickases cut only one strand → never blunt
+    if nuclease.nickase:
+        return False
+    
     name_lower = nuclease.name.lower()
     
     # Cas12 family produces staggered cuts
@@ -400,6 +404,52 @@ def is_guide_compatible(
                         return True
     
     return False
+
+def validate_nuclease(nuclease: Nuclease) -> None:
+    if not isinstance(nuclease, Nuclease):
+        raise TypeError(
+            f"Expected a Nuclease instance, got {type(nuclease).__name__}"
+        )
+
+    if not nuclease.name or not nuclease.name.strip():
+        raise ValueError("Nuclease name must be a non-empty string")
+
+    pam_pattern: str
+    if isinstance(nuclease.pam, PAM):
+        pam_pattern = nuclease.pam.pattern
+    elif isinstance(nuclease.pam, str):
+        pam_pattern = nuclease.pam
+    else:
+        raise ValueError(
+            f"PAM must be a PAM object or a string, got {type(nuclease.pam).__name__}"
+        )
+
+    if not pam_pattern:
+        raise ValueError("PAM pattern must not be empty")
+
+    invalid_chars = {
+        ch for ch in pam_pattern.upper() if ch not in IUPAC
+    }
+    if invalid_chars:
+        raise ValueError(
+            f"PAM pattern contains invalid IUPAC character(s): "
+            f"{sorted(invalid_chars)}"
+        )
+    if not isinstance(nuclease.spacer_length, int) or nuclease.spacer_length < 17 or nuclease.spacer_length > 30:
+        raise ValueError(
+            f"spacer_length must be an integer in 17–30, "
+            f"got {nuclease.spacer_length}"
+        )
+    offset = cut_offset(nuclease)
+    if abs(offset) > nuclease.spacer_length:
+        raise ValueError(
+            f"cut offset ({offset}) falls outside the guide range "
+            f"(spacer_length={nuclease.spacer_length})"
+        )
+    if nuclease.nickase and produces_blunt_cut(nuclease):
+        raise ValueError(
+            "Nickase nucleases should not produce blunt (double-strand) cuts"
+        )
 
 def recognizes_strand(nuclease: Nuclease | str) -> Literal["+", "-", "both"]:
     if isinstance(nuclease, str):
