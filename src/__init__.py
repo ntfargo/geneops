@@ -16,6 +16,8 @@
 
 __version__ = "0.0.1"
 
+from .coordinates import Interval, Strand, opposite_strand
+
 from .nuclease import (
     Nuclease,
     RRegistry,
@@ -41,6 +43,10 @@ from .guide import (
 )
 
 __all__ = [
+    # coordinates
+    "Interval",
+    "Strand",
+    "opposite_strand",
     # nuclease
     "Nuclease",
     "RRegistry",

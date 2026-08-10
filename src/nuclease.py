@@ -297,7 +297,6 @@ def cut_offset(nuclease: Nuclease | str) -> int:
     # Cas9 family cuts 3bp upstream of PAM (between protospacer and PAM)
     return -3
 
-
 def produces_blunt_cut(nuclease: Nuclease | str) -> bool:
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
@@ -315,7 +314,6 @@ def produces_blunt_cut(nuclease: Nuclease | str) -> bool:
     # Cas9 family produces blunt cuts
     return True
 
-
 def overhang_length(nuclease: Nuclease | str) -> int:
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
@@ -329,30 +327,40 @@ def overhang_length(nuclease: Nuclease | str) -> int:
     # Cas9 produces blunt cuts (0 overhang)
     return 0
 
-
 def cut_position(
-    pam_index: int, 
-    nuclease: Nuclease | str, 
-    strand: Literal["+", "-"] = "+"
+    pam_index: int,
+    nuclease: Nuclease | str,
+    pam_strand: Literal["+", "-"] = "+",
 ) -> int | tuple[int, int]:
+    """Return cut boundaries in zero-based forward-reference coordinates.
+
+    ``pam_index`` is the start of the PAM's half-open interval on the forward
+    reference, and ``pam_strand`` is the strand containing the recognized PAM.
+    A blunt cut returns one boundary; a staggered cut returns two boundaries.
+    """
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
+    if pam_strand not in ("+", "-"):
+        raise ValueError(
+            f"pam_strand must be '+' or '-', got {pam_strand!r}"
+        )
     
     offset = cut_offset(nuclease)
     orientation = pam_orientation(nuclease)
     
     # For 3' PAM (like Cas9): PAM is downstream, cut is upstream
     if orientation == "3'":
-        if strand == "+":
+        if pam_strand == "+":
             cut_pos = pam_index + offset
         else:
-            # Reverse strand: PAM position is at the end, adjust accordingly
+            # The reverse-strand protospacer lies to the right in reference
+            # coordinates, so measure from the PAM's right boundary.
             pam_len = nuclease.pam_length()
             cut_pos = pam_index + pam_len - offset
     
     # For 5' PAM (like Cas12a): PAM is upstream, cut is downstream
     else:
-        if strand == "+":
+        if pam_strand == "+":
             pam_len = nuclease.pam_length()
             cut_pos = pam_index + pam_len + offset
         else:
@@ -394,8 +402,8 @@ def is_guide_compatible(
     orientation = pam_orientation(nuclease)
     pam_len = len(pam)
     guide_len = len(guide)
-    target_upper = target.upper()
-    guide_upper = guide.upper()
+    target_upper = target.upper().replace("U", "T")
+    guide_upper = guide.upper().replace("U", "T")
     
     # For 3' PAM (Cas9): guide binds upstream of PAM on the target strand
     # Target structure: [guide binding site][PAM]
@@ -408,8 +416,8 @@ def is_guide_compatible(
                 guide_start = i - guide_len
                 if guide_start >= 0:
                     binding_site = target_upper[guide_start:i]
-                    # Guide binds to complementary strand, so check reverse complement
-                    if _reverse_complement(guide_upper) == binding_site:
+                    # Guide sequences are reported in PAM-strand orientation.
+                    if guide_upper == binding_site:
                         return True
     
     # For 5' PAM (Cas12): guide binds downstream of PAM on the target strand
@@ -423,8 +431,8 @@ def is_guide_compatible(
                 guide_end = guide_start + guide_len
                 if guide_end <= len(target):
                     binding_site = target_upper[guide_start:guide_end]
-                    # Guide binds to complementary strand, so check reverse complement
-                    if _reverse_complement(guide_upper) == binding_site:
+                    # Guide sequences are reported in PAM-strand orientation.
+                    if guide_upper == binding_site:
                         return True
     
     return False
@@ -505,18 +513,22 @@ def binding_strand(
 
     pam = nuclease.get_pam()
     orientation = pam_orientation(nuclease)
-    guide_rc = _reverse_complement(guide.upper())
-    target = target.upper()
+    guide = guide.upper().replace("U", "T")
+    target = target.upper().replace("U", "T")
 
     for pam_pos, pam_strand in find_pam_sites_with_strand(target, pam):
         bind_strand = "-" if pam_strand == "+" else "+"
 
-        if orientation == "3'":
-            start = pam_pos - len(guide)
-            end = pam_pos
-        else:
+        if pam_strand == "+" and orientation == "3'":
+            start, end = pam_pos - len(guide), pam_pos
+        elif pam_strand == "+" and orientation == "5'":
             start = pam_pos + len(pam)
             end = start + len(guide)
+        elif pam_strand == "-" and orientation == "3'":
+            start = pam_pos + len(pam)
+            end = start + len(guide)
+        else:
+            start, end = pam_pos - len(guide), pam_pos
 
         if start < 0 or end > len(target):
             continue
@@ -526,7 +538,7 @@ def binding_strand(
         if pam_strand == "-":
             protospacer = _reverse_complement(protospacer)
 
-        if protospacer == guide_rc:
+        if protospacer == guide:
             return bind_strand
 
     return None

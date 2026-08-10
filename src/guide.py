@@ -17,16 +17,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from .coordinates import Interval, Strand, opposite_strand
+
 from .nuclease import (
     Nuclease,
     cut_position,
-    is_guide_compatible,
     pam_orientation,
 )
- 
-_VALID_DNA_BASES = frozenset("ACGT")
 
-_COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G"}
+_VALID_DNA_BASES = frozenset("ACGT")
+_VALID_TARGET_BASES = frozenset("ACGTN")
+
+_COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
 
 def normalize(seq: str) -> str:
     seq = seq.upper().replace("U", "T")
@@ -38,54 +40,112 @@ def normalize(seq: str) -> str:
     return seq
 
 def reverse_complement(seq: str) -> str:
+    seq = seq.upper().replace("U", "T")
+    invalid = set(seq) - _VALID_TARGET_BASES
+    if invalid:
+        raise ValueError(f"Invalid bases in sequence: {sorted(invalid)}")
     return "".join(_COMPLEMENT[b] for b in reversed(seq))
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class Guide:
+    """A construct-ready guide located on a forward reference sequence.
+
+    ``sequence`` is stored 5' to 3' in the PAM-strand orientation using the
+    DNA alphabet.  It is therefore identical to the protospacer on the strand
+    containing the PAM.  All intervals use forward-reference coordinates.
+    """
+
     sequence: str
     nuclease: Nuclease
     pam: str
-    pam_position: int
-    strand: Literal["+", "-"]
+    pam_interval: Interval
+    pam_strand: Strand
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sequence", normalize(self.sequence))
+        object.__setattr__(self, "pam", normalize(self.pam))
 
-    def binding_interval(self) -> tuple[int, int]:
+        if self.pam_strand not in ("+", "-"):
+            raise ValueError(
+                f"pam_strand must be '+' or '-', got {self.pam_strand!r}"
+            )
+        if len(self.sequence) != self.nuclease.spacer_length:
+            raise ValueError(
+                f"Guide length {len(self.sequence)} does not match "
+                f"{self.nuclease.name} spacer length "
+                f"{self.nuclease.spacer_length}"
+            )
+        if len(self.pam_interval) != len(self.pam):
+            raise ValueError(
+                "PAM interval length must equal the observed PAM length"
+            )
+        if not self.nuclease.matches_pam(self.pam):
+            raise ValueError(
+                f"PAM {self.pam!r} does not match "
+                f"{self.nuclease.name} pattern {self.nuclease.get_pam().pattern!r}"
+            )
+
+    @property
+    def target_strand(self) -> Strand:
+        """The DNA strand hybridized to the guide RNA."""
+        return opposite_strand(self.pam_strand)
+
+    @property
+    def protospacer_interval(self) -> Interval:
+        """Return the protospacer as a forward-reference interval."""
         orientation = pam_orientation(self.nuclease)
-        pam_len = len(self.pam)
         spacer_len = self.nuclease.spacer_length
 
-        # Spacer sits upstream of PAM on the strand with the PAM:
-        #   (+, 3') or (-, 5')  →  spacer is left of PAM in fwd coords
-        # Spacer sits downstream of PAM:
-        #   (+, 5') or (-, 3')  →  spacer is right of PAM in fwd coords
+        # Relative positions are mapped onto forward-reference coordinates.
         spacer_upstream = (
-            (self.strand == "+" and orientation == "3'")
-            or (self.strand == "-" and orientation == "5'")
+            (self.pam_strand == "+" and orientation == "3'")
+            or (self.pam_strand == "-" and orientation == "5'")
         )
 
         if spacer_upstream:
-            return (self.pam_position - spacer_len, self.pam_position)
-        return (
-            self.pam_position + pam_len,
-            self.pam_position + pam_len + spacer_len,
+            return Interval(
+                self.pam_interval.start - spacer_len,
+                self.pam_interval.start,
+            )
+        return Interval(
+            self.pam_interval.end,
+            self.pam_interval.end + spacer_len,
         )
 
     def cut_site(self) -> int | tuple[int, int]:
-        return cut_position(self.pam_position, self.nuclease, self.strand)
-
-    def binds_strand(self) -> Literal["+", "-"]:
-        return self.strand
+        """Return forward-reference cut boundary or boundaries."""
+        return cut_position(
+            self.pam_interval.start,
+            self.nuclease,
+            self.pam_strand,
+        )
 
 def normalize_target(seq: str) -> str:
-    return seq.upper().replace("U", "T")
+    seq = seq.upper().replace("U", "T")
+    if not seq:
+        raise ValueError("Target sequence must not be empty")
+    invalid = set(seq) - _VALID_TARGET_BASES
+    if invalid:
+        raise ValueError(f"Invalid bases in target sequence: {sorted(invalid)}")
+    return seq
 
 def find_guides(
     target: str,
     nuclease: Nuclease,
-    strand: Literal["+", "-", "both"] = "both",
+    pam_strand: Literal["+", "-", "both"] = "both",
 ) -> list[Guide]:
+    """Find guides, reporting all coordinates on the forward reference.
+
+    ``pam_strand`` filters the strand containing the recognized PAM.  Guide
+    sequences are returned 5' to 3' in that strand's orientation.
+    """
+    if pam_strand not in ("+", "-", "both"):
+        raise ValueError(
+            "pam_strand must be '+', '-', or 'both', "
+            f"got {pam_strand!r}"
+        )
+
     target_norm = normalize_target(target)
     pam_obj = nuclease.get_pam()
     orientation = pam_orientation(nuclease)
@@ -94,7 +154,7 @@ def find_guides(
     seq_len = len(target_norm)
 
     guides: list[Guide] = []
-    if strand in ("+", "both"):
+    if pam_strand in ("+", "both"):
         for p in pam_obj.find_sites(target_norm):
             if orientation == "3'":
                 sp_start, sp_end = p - spacer_len, p
@@ -106,19 +166,20 @@ def find_guides(
                 continue
 
             protospacer = target_norm[sp_start:sp_end]
-            guide_seq = reverse_complement(protospacer)
+            if set(protospacer) - _VALID_DNA_BASES:
+                continue
 
             guides.append(
                 Guide(
-                    sequence=guide_seq,
+                    sequence=protospacer,
                     nuclease=nuclease,
                     pam=target_norm[p : p + pam_len],
-                    pam_position=p,
-                    strand="+",
+                    pam_interval=Interval(p, p + pam_len),
+                    pam_strand="+",
                 )
             )
 
-    if strand in ("-", "both"):
+    if pam_strand in ("-", "both"):
         rev_target = reverse_complement(target_norm)
         for j in pam_obj.find_sites(rev_target):
             if orientation == "3'":
@@ -131,18 +192,22 @@ def find_guides(
                 continue
 
             protospacer = rev_target[sp_start:sp_end]
-            guide_seq = reverse_complement(protospacer)
+            if set(protospacer) - _VALID_DNA_BASES:
+                continue
 
-            # Map PAM position back to forward-strand coordinates
-            pam_pos_fwd = seq_len - j - pam_len
+            # Map the reverse-oriented PAM back to a forward-reference span.
+            pam_start_fwd = seq_len - j - pam_len
 
             guides.append(
                 Guide(
-                    sequence=guide_seq,
+                    sequence=protospacer,
                     nuclease=nuclease,
-                    pam=target_norm[pam_pos_fwd : pam_pos_fwd + pam_len],
-                    pam_position=pam_pos_fwd,
-                    strand="-",
+                    pam=rev_target[j : j + pam_len],
+                    pam_interval=Interval(
+                        pam_start_fwd,
+                        pam_start_fwd + pam_len,
+                    ),
+                    pam_strand="-",
                 )
             )
 

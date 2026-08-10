@@ -286,26 +286,22 @@ def test_is_guide_length_valid_empty_guide():
 
 def test_is_guide_compatible_cas9_valid():
     """Test guide compatibility for Cas9 with valid guide and target."""
-    # SpCas9 has 3' PAM (NGG), guide binds upstream of PAM
-    # Target: [20nt binding site][NGG]
-    # Guide is reverse complement of binding site
-    guide = "ATCGATCGATCGATCGATCG"  # 20nt guide
-    # Reverse complement of guide: CGATCGATCGATCGATCGAT
-    # Target = binding_site + PAM
-    target = "CGATCGATCGATCGATCGATAGG"  # 20nt + NGG
+    # Geneops reports the construct-ready guide in PAM-strand orientation.
+    guide = "CGATCGATCGATCGATCGAT"
+    target = "CGATCGATCGATCGATCGATAGG"
     
     assert is_guide_compatible(guide, target, "SpCas9")
 
 def test_is_guide_compatible_cas9_wrong_length():
     """Test guide compatibility fails with wrong guide length."""
-    guide = "ATCGATCGATCGATCGATC"  # 19nt (wrong length)
+    guide = "CGATCGATCGATCGATCGA"  # 19nt (wrong length)
     target = "CGATCGATCGATCGATCGATAGG"
     
     assert not is_guide_compatible(guide, target, "SpCas9")
 
 def test_is_guide_compatible_cas9_no_pam():
     """Test guide compatibility fails without valid PAM."""
-    guide = "ATCGATCGATCGATCGATCG"  # 20nt
+    guide = "CGATCGATCGATCGATCGAT"  # 20nt
     # Target has no valid PAM (NGG)
     target = "CGATCGATCGATCGATCGATAAT"  # No NGG
     
@@ -322,9 +318,7 @@ def test_is_guide_compatible_cas12a_valid():
     """Test guide compatibility for Cas12a with valid guide and target."""
     # Cas12a has 5' PAM (TTTV), guide binds downstream of PAM
     # Target: [TTTV][23nt binding site]
-    guide = "ATCGATCGATCGATCGATCGATC"  # 23nt guide
-    # Reverse complement of guide: GATCGATCGATCGATCGATCGAT
-    # Target = PAM + binding_site
+    guide = "GATCGATCGATCGATCGATCGAT"  # 23nt guide
     target = "TTTAGATCGATCGATCGATCGATCGAT"  # TTTA + 23nt
     
     assert is_guide_compatible(guide, target, "AsCas12a")
@@ -346,7 +340,7 @@ def test_is_guide_compatible_cas12a_no_pam():
 
 def test_is_guide_compatible_case_insensitive():
     """Test guide compatibility is case-insensitive."""
-    guide = "atcgatcgatcgatcgatcg"  # lowercase
+    guide = "cgatcgatcgatcgatcgat"  # lowercase
     target = "CGATCGATCGATCGATCGATAGG"  # uppercase
     
     assert is_guide_compatible(guide, target, "SpCas9")
@@ -354,7 +348,7 @@ def test_is_guide_compatible_case_insensitive():
 def test_is_guide_compatible_with_nuclease_object():
     """Test guide compatibility with Nuclease object instead of string."""
     cas9 = get_nuclease("SpCas9")
-    guide = "ATCGATCGATCGATCGATCG"
+    guide = "CGATCGATCGATCGATCGAT"
     target = "CGATCGATCGATCGATCGATAGG"
     
     assert is_guide_compatible(guide, target, cas9)
@@ -391,11 +385,20 @@ def test_binding_strand_pam_on_plus(spcas9):
         "AAAAA"
     )
 
-    guide = _reverse_complement("TTTTTTTTTTTTTTTTTTTT")
+    guide = "TTTTTTTTTTTTTTTTTTTT"
 
     strand = binding_strand(guide, target, spcas9)
 
     assert strand == "-"
+
+
+def test_binding_strand_pam_on_minus(spcas9):
+    """A PAM on the reverse strand means the guide binds the plus strand."""
+    guide = "ATGCACGTTAGCTACGATCA"
+    reverse_oriented_site = _reverse_complement(guide + "TGG")
+    target = "A" * 10 + reverse_oriented_site + "A" * 10
+
+    assert binding_strand(guide, target, spcas9) == "+"
 
 def test_validate_nuclease_accepts_valid_cas9():
     """Valid default nucleases pass validation without errors."""

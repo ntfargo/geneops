@@ -10,25 +10,55 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-# limitations under the License. 
+# limitations under the License.
 
 import pytest
 
+from geneops.coordinates import Interval
 from geneops.guide import (
     Guide,
-    normalize,
-    reverse_complement,
     find_guides,
-    validate_guide_sequence,
     guide_gc_content,
+    normalize,
+    normalize_target,
+    reverse_complement,
+    validate_guide_sequence,
 )
-from geneops.nuclease import (
-    Nuclease,
-    PAM,
-    get_nuclease,
-    pam_orientation,
-    cut_position,
-)
+from geneops.nuclease import Nuclease, get_nuclease
+
+
+@pytest.fixture
+def spcas9() -> Nuclease:
+    return get_nuclease("SpCas9")
+
+
+@pytest.fixture
+def ascas12a() -> Nuclease:
+    return get_nuclease("AsCas12a")
+
+
+def make_guide(
+    nuclease: Nuclease,
+    *,
+    sequence: str | None = None,
+    pam: str | None = None,
+    pam_interval: Interval | None = None,
+    pam_strand: str = "+",
+) -> Guide:
+    if sequence is None:
+        sequence = "A" * nuclease.spacer_length
+    if pam is None:
+        pam = "AGG" if nuclease.name == "SpCas9" else "TTTG"
+    if pam_interval is None:
+        pam_interval = Interval(30, 30 + len(pam))
+    return Guide(
+        sequence=sequence,
+        nuclease=nuclease,
+        pam=pam,
+        pam_interval=pam_interval,
+        pam_strand=pam_strand,  # type: ignore[arg-type]
+    )
+
 
 class TestNormalize:
     def test_uppercase(self):
@@ -37,470 +67,294 @@ class TestNormalize:
     def test_u_to_t(self):
         assert normalize("AUGC") == "ATGC"
 
-    def test_mixed_case_and_u(self):
-        assert normalize("aUgC") == "ATGC"
-
-    def test_already_valid(self):
-        assert normalize("ACGT") == "ACGT"
-
     def test_empty_raises(self):
         with pytest.raises(ValueError, match="empty"):
             normalize("")
 
-    def test_invalid_base_raises(self):
+    @pytest.mark.parametrize("sequence", ["ACGX", "AC GT", "ACG1T"])
+    def test_invalid_guide_bases_raise(self, sequence):
         with pytest.raises(ValueError, match="Invalid bases"):
-            normalize("ACGX")
+            normalize(sequence)
 
-    def test_multiple_invalid_bases(self):
-        with pytest.raises(ValueError, match="Invalid bases"):
-            normalize("XYZACGT")
+    def test_target_allows_unknown_bases(self):
+        assert normalize_target("acnug") == "ACNTG"
 
-    def test_whitespace_rejected(self):
-        with pytest.raises(ValueError):
-            normalize("AC GT")
+    def test_invalid_target_base_raises(self):
+        with pytest.raises(ValueError, match="target sequence"):
+            normalize_target("ACGTX")
 
-    def test_digit_rejected(self):
-        with pytest.raises(ValueError):
-            normalize("ACG1T")
 
 class TestReverseComplement:
     def test_basic(self):
-        assert reverse_complement("ACGT") == "ACGT"  # palindrome
-
-    def test_non_palindrome(self):
-        assert reverse_complement("AAAA") == "TTTT"
-
-    def test_single_base(self):
-        assert reverse_complement("A") == "T"
-        assert reverse_complement("G") == "C"
-
-    def test_asymmetric(self):
         assert reverse_complement("AACG") == "CGTT"
 
+    def test_rna_and_case_are_normalized(self):
+        assert reverse_complement("augn") == "NCAT"
+
     def test_round_trip(self):
-        seq = "GCTAGCTA"
-        assert reverse_complement(reverse_complement(seq)) == seq
+        sequence = "GCTANNGCTA"
+        assert reverse_complement(reverse_complement(sequence)) == sequence
 
-@pytest.fixture
-def spcas9() -> Nuclease:
-    return get_nuclease("SpCas9")
+    def test_invalid_base_raises(self):
+        with pytest.raises(ValueError, match="Invalid bases"):
+            reverse_complement("ACGX")
 
-@pytest.fixture
-def ascas12a() -> Nuclease:
-    return get_nuclease("AsCas12a")
 
 class TestGuideConstruction:
-    def test_sequence_normalized_on_init(self, spcas9):
-        g = Guide(
-            sequence="acgt" * 5,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
+    def test_sequence_and_pam_are_normalized(self, spcas9):
+        guide = make_guide(
+            spcas9,
+            sequence="augc" * 5,
+            pam="ugg",
         )
-        assert g.sequence == "ACGT" * 5
-
-    def test_rna_input_converted(self, spcas9):
-        g = Guide(
-            sequence="AUGCAUGCAUGCAUGCAUGC",
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert "U" not in g.sequence
-        assert g.sequence == "ATGCATGCATGCATGCATGC"
+        assert guide.sequence == "ATGC" * 5
+        assert guide.pam == "TGG"
 
     def test_invalid_sequence_raises(self, spcas9):
-        with pytest.raises(ValueError):
-            Guide(
-                sequence="XXXX",
-                nuclease=spcas9,
-                pam="AGG",
-                pam_position=20,
-                strand="+",
-            )
+        with pytest.raises(ValueError, match="Invalid bases"):
+            make_guide(spcas9, sequence="X" * 20)
+
+    def test_wrong_spacer_length_raises(self, spcas9):
+        with pytest.raises(ValueError, match="does not match"):
+            make_guide(spcas9, sequence="A" * 19)
+
+    def test_invalid_pam_raises(self, spcas9):
+        with pytest.raises(ValueError, match="does not match"):
+            make_guide(spcas9, pam="AAA")
+
+    def test_pam_interval_length_must_match(self, spcas9):
+        with pytest.raises(ValueError, match="interval length"):
+            make_guide(spcas9, pam_interval=Interval(30, 34))
+
+    def test_invalid_pam_strand_raises(self, spcas9):
+        with pytest.raises(ValueError, match="pam_strand"):
+            make_guide(spcas9, pam_strand="both")
 
     def test_frozen(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
+        guide = make_guide(spcas9)
         with pytest.raises(AttributeError):
-            g.sequence = "T" * 20  # type: ignore[misc]
+            guide.sequence = "T" * 20  # type: ignore[misc]
 
-    def test_strand_values(self, spcas9):
-        for s in ("+", "-"):
-            g = Guide(
-                sequence="A" * 20,
-                nuclease=spcas9,
-                pam="AGG",
-                pam_position=20,
-                strand=s,
-            )
-            assert g.strand == s
+    @pytest.mark.parametrize(
+        ("pam_strand", "target_strand"),
+        [("+", "-"), ("-", "+")],
+    )
+    def test_target_strand_is_opposite_pam_strand(
+        self,
+        spcas9,
+        pam_strand,
+        target_strand,
+    ):
+        guide = make_guide(spcas9, pam_strand=pam_strand)
+        assert guide.pam_strand == pam_strand
+        assert guide.target_strand == target_strand
 
-class TestBindingInterval:
-    """binding_interval returns (start, end) of spacer on target."""
+    def test_ambiguous_legacy_fields_are_absent(self, spcas9):
+        guide = make_guide(spcas9)
+        assert not hasattr(guide, "strand")
+        assert not hasattr(guide, "pam_position")
 
-    def test_cas9_forward_strand(self, spcas9):
-        # SpCas9: 3' PAM, + strand → spacer is upstream (left) of PAM
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
+
+class TestProtospacerInterval:
+    @pytest.mark.parametrize(
+        ("nuclease_name", "pam_interval", "pam_strand", "expected"),
+        [
+            ("SpCas9", Interval(20, 23), "+", Interval(0, 20)),
+            ("SpCas9", Interval(10, 13), "-", Interval(13, 33)),
+            ("AsCas12a", Interval(10, 14), "+", Interval(14, 37)),
+            ("AsCas12a", Interval(30, 34), "-", Interval(7, 30)),
+        ],
+    )
+    def test_interval_geometry(
+        self,
+        nuclease_name,
+        pam_interval,
+        pam_strand,
+        expected,
+    ):
+        nuclease = get_nuclease(nuclease_name)
+        guide = make_guide(
+            nuclease,
+            pam_interval=pam_interval,
+            pam_strand=pam_strand,
         )
-        start, end = g.binding_interval()
-        assert start == 0
-        assert end == 20
-        assert end - start == spcas9.spacer_length
+        assert guide.protospacer_interval == expected
+        assert len(guide.protospacer_interval) == nuclease.spacer_length
 
-    def test_cas9_reverse_strand(self, spcas9):
-        # SpCas9: 3' PAM, - strand → orientation "3'" with "-" means
-        # spacer downstream of PAM in fwd coords
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=10,
-            strand="-",
-        )
-        start, end = g.binding_interval()
-        assert end - start == spcas9.spacer_length
-        # 5' orientation rule: spacer to the right of PAM
-        assert start == 10 + 3  # pam_position + pam_len
-        assert end == 10 + 3 + 20
-
-    def test_cas12a_forward_strand(self, ascas12a):
-        # AsCas12a: 5' PAM, + strand → spacer downstream (right) of PAM
-        g = Guide(
-            sequence="A" * 23,
-            nuclease=ascas12a,
-            pam="TTTG",
-            pam_position=10,
-            strand="+",
-        )
-        start, end = g.binding_interval()
-        assert start == 10 + 4  # pam_pos + pam_len(4)
-        assert end == 10 + 4 + 23
-
-    def test_cas12a_reverse_strand(self, ascas12a):
-        # AsCas12a: 5' PAM, - strand → spacer upstream (left) of PAM
-        g = Guide(
-            sequence="A" * 23,
-            nuclease=ascas12a,
-            pam="TTTG",
-            pam_position=30,
-            strand="-",
-        )
-        start, end = g.binding_interval()
-        assert end - start == ascas12a.spacer_length
-        assert end == 30  # spacer ends at pam_position
-        assert start == 30 - 23
-
-    def test_interval_length_matches_spacer(self, spcas9, ascas12a):
-        for nuc in (spcas9, ascas12a):
-            pam_obj = nuc.get_pam()
-            g = Guide(
-                sequence="A" * nuc.spacer_length,
-                nuclease=nuc,
-                pam="A" * len(pam_obj),
-                pam_position=30,
-                strand="+",
-            )
-            s, e = g.binding_interval()
-            assert e - s == nuc.spacer_length
 
 class TestCutSite:
-    def test_cas9_blunt_cut_returns_int(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
+    @pytest.mark.parametrize(
+        ("nuclease_name", "pam_interval", "pam_strand", "expected"),
+        [
+            ("SpCas9", Interval(20, 23), "+", 17),
+            ("SpCas9", Interval(10, 13), "-", 16),
+            ("AsCas12a", Interval(10, 14), "+", (32, 37)),
+            ("AsCas12a", Interval(30, 34), "-", (12, 17)),
+        ],
+    )
+    def test_cut_boundaries_use_forward_coordinates(
+        self,
+        nuclease_name,
+        pam_interval,
+        pam_strand,
+        expected,
+    ):
+        guide = make_guide(
+            get_nuclease(nuclease_name),
+            pam_interval=pam_interval,
+            pam_strand=pam_strand,
         )
-        result = g.cut_site()
-        assert isinstance(result, int)
+        assert guide.cut_site() == expected
 
-    def test_cas12a_staggered_cut_returns_tuple(self, ascas12a):
-        g = Guide(
-            sequence="A" * 23,
-            nuclease=ascas12a,
-            pam="TTTG",
-            pam_position=10,
-            strand="+",
-        )
-        result = g.cut_site()
-        assert isinstance(result, tuple)
-        assert len(result) == 2
 
-    def test_cut_site_delegates_to_nuclease(self, spcas9):
-        pam_pos = 25
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=pam_pos,
-            strand="+",
-        )
-        expected = cut_position(pam_pos, spcas9, "+")
-        assert g.cut_site() == expected
-
-    def test_cut_site_reverse_strand(self, spcas9):
-        pam_pos = 15
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=pam_pos,
-            strand="-",
-        )
-        expected = cut_position(pam_pos, spcas9, "-")
-        assert g.cut_site() == expected
-
-class TestBindsStrand:
-    def test_forward(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert g.binds_strand() == "+"
-
-    def test_reverse(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="-",
-        )
-        assert g.binds_strand() == "-"
 class TestFindGuides:
-    """find_guides scans a target for PAM sites and returns Guide objects."""
+    spacer = "ATGCACGTTAGCTACGATCA"
 
-    # Helper: build a target with a known PAM at a known position for SpCas9
-    # Target layout (+ strand, 3' PAM): [spacer][PAM]...
-    @staticmethod
-    def _cas9_target() -> str:
-        spacer = "ATGCATGCATGCATGCATGC"  # 20 nt
-        pam = "TGG"
-        flank = "A" * 10
-        return flank + spacer + pam + flank
+    @classmethod
+    def plus_cas9_target(cls) -> str:
+        return "A" * 10 + cls.spacer + "TGG" + "A" * 10
 
-    def test_returns_list(self, spcas9):
-        guides = find_guides("AAAAAAAAAAAAAAAAAAAAAAATGGAAAA", spcas9)
-        assert isinstance(guides, list)
+    @classmethod
+    def minus_cas9_target(cls) -> str:
+        oriented_site = cls.spacer + "TGG"
+        return "A" * 10 + reverse_complement(oriented_site) + "A" * 10
 
-    def test_finds_cas9_pam_on_plus(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9, strand="+")
-        assert len(guides) >= 1
-        for g in guides:
-            assert g.strand == "+"
-            assert isinstance(g, Guide)
+    def test_plus_pam_returns_construct_ready_sequence(self, spcas9):
+        guides = find_guides(
+            self.plus_cas9_target(),
+            spcas9,
+            pam_strand="+",
+        )
+        guide = next(g for g in guides if g.pam_interval == Interval(30, 33))
 
-    def test_guide_nuclease_matches(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9)
-        for g in guides:
-            assert g.nuclease is spcas9
+        assert guide.sequence == self.spacer
+        assert guide.pam == "TGG"
+        assert guide.pam_strand == "+"
+        assert guide.target_strand == "-"
+        assert guide.protospacer_interval == Interval(10, 30)
 
-    def test_guide_sequence_length(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9)
-        for g in guides:
-            assert len(g.sequence) == spcas9.spacer_length
+    def test_minus_pam_maps_back_to_forward_coordinates(self, spcas9):
+        guides = find_guides(
+            self.minus_cas9_target(),
+            spcas9,
+            pam_strand="-",
+        )
+        guide = next(g for g in guides if g.pam_interval == Interval(10, 13))
 
-    def test_strand_filter_plus(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9, strand="+")
-        assert all(g.strand == "+" for g in guides)
+        assert guide.sequence == self.spacer
+        assert guide.pam == "TGG"
+        assert guide.pam_strand == "-"
+        assert guide.target_strand == "+"
+        assert guide.protospacer_interval == Interval(13, 33)
 
-    def test_strand_filter_minus(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9, strand="-")
-        assert all(g.strand == "-" for g in guides)
+    def test_reverse_complement_symmetry(self, spcas9):
+        target = self.plus_cas9_target()
+        reverse_target = reverse_complement(target)
+        plus = next(
+            g
+            for g in find_guides(target, spcas9, pam_strand="+")
+            if g.pam_interval == Interval(30, 33)
+        )
+        minus = next(
+            g
+            for g in find_guides(reverse_target, spcas9, pam_strand="-")
+            if g.pam_interval == Interval(10, 13)
+        )
 
-    def test_both_strands(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9, strand="both")
-        strands = {g.strand for g in guides}
-        # Should be able to find guides on at least one strand
-        assert len(guides) >= 1
+        assert plus.sequence == minus.sequence
+        assert plus.pam == minus.pam
+        assert plus.pam_strand != minus.pam_strand
+        assert plus.pam_interval == Interval(
+            len(target) - minus.pam_interval.end,
+            len(target) - minus.pam_interval.start,
+        )
+
+    def test_cas12a_uses_five_prime_pam_geometry(self, ascas12a):
+        spacer = "ACGTACGTACGTACGTACGTACG"
+        target = "C" * 10 + "TTTG" + spacer + "C" * 10
+        guide = next(
+            g
+            for g in find_guides(target, ascas12a, pam_strand="+")
+            if g.pam_interval == Interval(10, 14)
+        )
+
+        assert guide.sequence == spacer
+        assert guide.protospacer_interval == Interval(14, 37)
+
+    @pytest.mark.parametrize("pam_strand", ["+", "-", "both"])
+    def test_pam_strand_filter(self, spcas9, pam_strand):
+        guides = find_guides(
+            self.plus_cas9_target(),
+            spcas9,
+            pam_strand=pam_strand,
+        )
+        expected = {pam_strand} if pam_strand != "both" else {"+", "-"}
+        assert all(guide.pam_strand in expected for guide in guides)
+
+    def test_invalid_pam_strand_filter_raises(self, spcas9):
+        with pytest.raises(ValueError, match="pam_strand"):
+            find_guides(
+                self.plus_cas9_target(),
+                spcas9,
+                pam_strand="invalid",  # type: ignore[arg-type]
+            )
 
     def test_no_pam_returns_empty(self, spcas9):
-        # A target with no NGG at all
-        target = "A" * 50
-        guides = find_guides(target, spcas9, strand="+")
+        assert find_guides("A" * 50, spcas9, pam_strand="+") == []
+
+    def test_unknown_reference_bases_are_skipped(self, spcas9):
+        guides = find_guides("N" * 20 + "AGG", spcas9, pam_strand="+")
         assert guides == []
 
-    def test_cas12a_finds_guides(self, ascas12a):
-        # Target layout (+ strand, 5' PAM): [PAM][spacer]...
-        pam = "TTTG"
-        spacer = "A" * 23
-        flank = "C" * 10
-        target = flank + pam + spacer + flank
-        guides = find_guides(target, ascas12a, strand="+")
-        assert len(guides) >= 1
-        for g in guides:
-            assert len(g.sequence) == ascas12a.spacer_length
+    def test_invalid_target_base_raises(self, spcas9):
+        with pytest.raises(ValueError, match="target sequence"):
+            find_guides("A" * 20 + "XGG", spcas9)
 
-    def test_rna_target_handled(self, spcas9):
-        # Target with U instead of T should still work (normalize_target)
-        target = self._cas9_target().replace("T", "U")
+    def test_reported_sequences_reconstruct_from_reference(self, spcas9):
+        target = self.plus_cas9_target() + self.minus_cas9_target()
         guides = find_guides(target, spcas9)
-        # Should find the same guides as DNA target
-        assert isinstance(guides, list)
+        assert guides
 
-    def test_pam_position_is_nonnegative(self, spcas9):
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9)
-        for g in guides:
-            assert g.pam_position >= 0
+        for guide in guides:
+            protospacer = target[
+                guide.protospacer_interval.start : guide.protospacer_interval.end
+            ]
+            pam = target[guide.pam_interval.start : guide.pam_interval.end]
+            if guide.pam_strand == "-":
+                protospacer = reverse_complement(protospacer)
+                pam = reverse_complement(pam)
+            assert guide.sequence == protospacer
+            assert guide.pam == pam
 
-    def test_guide_pam_field_matches_target(self, spcas9):
-        """The .pam field of each returned Guide should actually match the
-        nuclease PAM pattern."""
-        target = self._cas9_target()
-        guides = find_guides(target, spcas9, strand="+")
-        for g in guides:
-            assert spcas9.matches_pam(g.pam)
 
 class TestValidateGuideSequence:
-    def test_valid_20mer(self):
-        validate_guide_sequence("A" * 20)  # should not raise
+    @pytest.mark.parametrize("length", [17, 20, 23, 30])
+    def test_valid_lengths(self, length):
+        validate_guide_sequence("A" * length)
 
-    def test_valid_23mer(self):
-        validate_guide_sequence("A" * 23)  # within 17-30
-
-    def test_too_short_raises(self):
-        with pytest.raises(ValueError, match="outside the expected range"):
-            validate_guide_sequence("A" * 10)
-
-    def test_too_long_raises(self):
-        with pytest.raises(ValueError, match="outside the expected range"):
-            validate_guide_sequence("A" * 35)
-
-    def test_boundary_17(self):
-        validate_guide_sequence("G" * 17)  # min accepted
-
-    def test_boundary_30(self):
-        validate_guide_sequence("C" * 30)  # max accepted
-
-    def test_boundary_16_raises(self):
+    @pytest.mark.parametrize("length", [0, 16, 31, 35])
+    def test_invalid_lengths_raise(self, length):
         with pytest.raises(ValueError):
-            validate_guide_sequence("G" * 16)
-
-    def test_boundary_31_raises(self):
-        with pytest.raises(ValueError):
-            validate_guide_sequence("C" * 31)
-
-    def test_empty_raises(self):
-        with pytest.raises(ValueError):
-            validate_guide_sequence("")
+            validate_guide_sequence("A" * length)
 
     def test_invalid_alphabet_raises(self):
         with pytest.raises(ValueError):
             validate_guide_sequence("X" * 20)
 
-    def test_rna_input_accepted(self):
-        # U→T normalization happens first, so RNA is fine
+    def test_rna_input_is_accepted(self):
         validate_guide_sequence("AUGCAUGCAUGCAUGCAUGC")
 
+
 class TestGuideGCContent:
-    def test_all_gc(self, spcas9):
-        g = Guide(
-            sequence="G" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert guide_gc_content(g) == pytest.approx(1.0)
-
-    def test_no_gc(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert guide_gc_content(g) == pytest.approx(0.0)
-
-    def test_half_gc(self, spcas9):
-        g = Guide(
-            sequence="GCGCGCGCGCAAAAAAAAAA",
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert guide_gc_content(g) == pytest.approx(0.5)
-
-    def test_mixed(self, spcas9):
-        seq = "ATGCATGCATGCATGCATGC"  # 10 G/C out of 20
-        g = Guide(
-            sequence=seq,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert guide_gc_content(g) == pytest.approx(0.5)
-
-    def test_returns_float(self, spcas9):
-        g = Guide(
-            sequence="A" * 20,
-            nuclease=spcas9,
-            pam="AGG",
-            pam_position=20,
-            strand="+",
-        )
-        assert isinstance(guide_gc_content(g), float)
-
-class TestIntegration:
-    """Verify that guides discovered by find_guides have coherent attributes."""
-
-    def test_cas9_guide_cut_inside_target(self, spcas9):
-        spacer = "ATGCATGCATGCATGCATGC"
-        pam = "TGG"
-        flank = "A" * 30
-        target = flank + spacer + pam + flank
-        guides = find_guides(target, spcas9, strand="+")
-        for g in guides:
-            cut = g.cut_site()
-            assert isinstance(cut, int)
-            assert 0 <= cut <= len(target)
-
-    def test_cas12a_guide_cut_inside_target(self, ascas12a):
-        pam = "TTTG"
-        spacer = "ACGTACGTACGTACGTACGTACG"  # 23 nt
-        flank = "C" * 30
-        target = flank + pam + spacer + flank
-        guides = find_guides(target, ascas12a, strand="+")
-        for g in guides:
-            cut = g.cut_site()
-            assert isinstance(cut, tuple)
-            assert all(0 <= c <= len(target) for c in cut)
-
-    def test_binding_interval_inside_target(self, spcas9):
-        spacer = "ATGCATGCATGCATGCATGC"
-        pam = "TGG"
-        flank = "A" * 30
-        target = flank + spacer + pam + flank
-        guides = find_guides(target, spcas9, strand="+")
-        for g in guides:
-            s, e = g.binding_interval()
-            assert s >= 0
-            assert e <= len(target)
-            assert e - s == spcas9.spacer_length
+    @pytest.mark.parametrize(
+        ("sequence", "expected"),
+        [
+            ("G" * 20, 1.0),
+            ("A" * 20, 0.0),
+            ("GCGCGCGCGC" + "A" * 10, 0.5),
+        ],
+    )
+    def test_gc_fraction(self, spcas9, sequence, expected):
+        guide = make_guide(spcas9, sequence=sequence)
+        assert guide_gc_content(guide) == pytest.approx(expected)
+        assert isinstance(guide_gc_content(guide), float)
