@@ -1,13 +1,13 @@
-# Geneops
+# GeneOps
 
 Unified Python toolkit for genome editing workflows: CRISPR, base editing, and prime editing.
-Design guides, score off-targets, model edit outcomes, and analyze results through a consistent.
+GeneOps is building a consistent foundation for guide design, scoring, outcome modeling, and analysis.
 
 ---
 
-## What is Geneops?
+## What is GeneOps?
 
-Geneops is an open-source Python library that provides shared core primitives and pipelines for
+GeneOps is an open-source Python library that provides shared core primitives and pipelines for
 genome editing tasks, including:
 
 - CRISPR guide RNA design
@@ -16,15 +16,26 @@ genome editing tasks, including:
 - Edit outcome prediction (indels, base edits, prime edits)
 - QC and downstream analysis
  
-# Install
-```
-# Create virtual env
-python -m venv venv
-source venv/bin/activate
+## Install
 
-# Install geneops
-pip install -e .
+```bash
+# Create virtual env
+python3 -m venv .venv
+
+# Install GeneOps
+.venv/bin/python -m pip install -e .
 ```
+
+## Documentation
+
+The documentation source lives in [`docs/`](docs/)
+
+```bash
+.venv/bin/python -m pip install -e ".[docs]"
+.venv/bin/python -m mkdocs serve
+```
+
+Public running docs: https://geneops.linearfox.com/
 
 Contributions are welcome! Please open issues or pull requests on the GitHub repository.
 

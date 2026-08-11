@@ -1,0 +1,90 @@
+site_name: GeneOps
+site_description: "Unified Python toolkit for genome editing (CRISPR/prime/base): design, off-target scoring, QC, and analysis."
+site_url: https://geneops.linearfox.com/
+dev_addr: 127.0.0.1:4125
+repo_url: https://github.com/ntfargo/geneops
+repo_name: ntfargo/geneops
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Nathan Fargo
+
+theme:
+  name: material
+  font: false
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    scheme: slate
+
+nav:
+  - Home: index.md
+  - Get started: getting-started.md
+  - Concepts:
+      - Coordinates and strands: concepts/coordinates.md
+      - Nucleases and PAMs: concepts/nucleases.md
+  - Guides:
+      - Discover guides: guides/discover-guides.md
+      - Define a custom nuclease: guides/custom-nuclease.md
+  - API reference:
+      - Overview: reference/index.md
+      - Coordinates: reference/coordinates.md
+      - Guides: reference/guide.md
+      - Nucleases: reference/nuclease.md
+  - Linear Fox: http://linearfox.com/
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            filters:
+              - "!^_"
+            heading_level: 2
+            members_order: source
+            merge_init_into_class: true
+            separate_signature: true
+            show_if_no_docstring: true
+            show_root_heading: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ntfargo/geneops
+      name: Geneops on GitHub

@@ -1,0 +1,3 @@
+# Guides API
+
+::: geneops.guide

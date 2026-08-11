@@ -1,0 +1,454 @@
+:root {
+  --go-bg: #090909;
+  --go-bg-deep: #070707;
+  --go-surface: #101010;
+  --go-surface-raised: #141414;
+  --go-border: #242424;
+  --go-border-soft: #1d1d1d;
+  --go-text: #ededed;
+  --go-text-muted: #929292;
+  --go-text-subtle: #666666;
+  --md-text-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --md-code-font: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+[data-md-color-scheme="slate"] {
+  color-scheme: dark;
+  --md-hue: 0;
+  --md-primary-fg-color: var(--go-bg);
+  --md-primary-fg-color--light: var(--go-surface);
+  --md-primary-fg-color--dark: var(--go-bg-deep);
+  --md-primary-bg-color: var(--go-text);
+  --md-accent-fg-color: #ffffff;
+  --md-accent-bg-color: var(--go-bg);
+  --md-default-bg-color: var(--go-bg);
+  --md-default-bg-color--light: var(--go-surface);
+  --md-default-bg-color--lighter: var(--go-surface-raised);
+  --md-default-bg-color--lightest: #191919;
+  --md-default-fg-color: var(--go-text);
+  --md-default-fg-color--light: var(--go-text-muted);
+  --md-default-fg-color--lighter: var(--go-text-subtle);
+  --md-default-fg-color--lightest: #343434;
+  --md-typeset-a-color: #d2d2d2;
+  --md-code-fg-color: #cecece;
+  --md-code-bg-color: var(--go-surface);
+  --md-code-hl-color: rgba(255, 255, 255, 0.05);
+  --md-footer-bg-color: var(--go-bg);
+  --md-footer-bg-color--dark: var(--go-bg-deep);
+}
+
+body,
+.md-main {
+  background: var(--go-bg);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--go-border-soft);
+  background: var(--go-bg);
+  box-shadow: none;
+}
+
+.md-header__button.md-logo {
+  display: none;
+}
+
+.md-header__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.md-header__source {
+  color: var(--go-text-muted);
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--go-border-soft);
+  background: var(--go-bg);
+}
+
+.md-tabs__link {
+  color: var(--go-text-subtle);
+  font-size: 0.68rem;
+  opacity: 1;
+}
+
+.md-tabs__link:hover,
+.md-tabs__item--active .md-tabs__link {
+  color: var(--go-text);
+}
+
+.md-search__form {
+  border: 1px solid var(--go-border-soft);
+  border-radius: 0.35rem;
+  background: var(--go-surface);
+}
+
+.md-search__form:hover {
+  border-color: var(--go-border);
+  background: var(--go-surface-raised);
+}
+
+.md-search__input::placeholder {
+  color: var(--go-text-subtle);
+}
+
+@media screen and (min-width: 60em) {
+  .md-header__title {
+    width: 9rem;
+    min-width: 9rem;
+    flex: 0 0 9rem;
+  }
+
+  .md-search {
+    max-width: none;
+    flex: 1 1 auto;
+    margin: 0 1rem;
+    padding: 0;
+  }
+
+  .md-search__inner,
+  .md-search__form {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.md-main__inner {
+  margin-top: 0;
+}
+
+.md-sidebar {
+  color: var(--go-text-muted);
+}
+
+.md-sidebar__scrollwrap {
+  scrollbar-color: var(--go-border) transparent;
+}
+
+.md-nav__title {
+  background: var(--go-bg) !important;
+  box-shadow: none !important;
+  color: var(--go-text) !important;
+  font-weight: 600;
+}
+
+.md-nav__link {
+  color: var(--go-text-subtle);
+  font-size: 0.69rem;
+}
+
+.md-nav__link:hover,
+.md-nav__link:focus,
+.md-nav__link--active {
+  color: var(--go-text);
+}
+
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+.md-content__inner {
+  padding-top: 2.8rem;
+  padding-bottom: 4rem;
+}
+
+.md-typeset {
+  color: #b5b5b5;
+  font-size: 0.78rem;
+  line-height: 1.72;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  color: var(--go-text);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.md-typeset h1 {
+  margin: 0 0 2rem;
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+
+.md-typeset h2 {
+  margin-top: 3rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--go-border-soft);
+  font-size: 1.15rem;
+}
+
+.md-typeset h3 {
+  margin-top: 2rem;
+  font-size: 0.92rem;
+}
+
+.md-typeset h4 {
+  font-size: 0.78rem;
+}
+
+.md-typeset a:not(.headerlink):not(.md-button) {
+  color: #d2d2d2;
+  text-decoration: underline;
+  text-decoration-color: #444444;
+  text-underline-offset: 0.18em;
+}
+
+.md-typeset a:not(.headerlink):not(.md-button):hover {
+  color: #ffffff;
+  text-decoration-color: #a0a0a0;
+}
+
+.md-typeset :not(pre) > code {
+  padding: 0.12rem 0.28rem;
+  border: 1px solid var(--go-border);
+  border-radius: 0.25rem;
+  background: var(--go-surface);
+  color: #d0d0d0;
+}
+
+.md-typeset .highlight {
+  overflow: hidden;
+  border: 1px solid var(--go-border);
+  border-radius: 0.45rem;
+  background: var(--go-surface);
+  box-shadow: none;
+}
+
+.md-typeset .highlight pre {
+  margin: 0;
+  background: transparent;
+}
+
+.md-typeset pre > code {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.md-code__button {
+  color: var(--go-text-subtle);
+}
+
+.md-typeset table:not([class]) {
+  border: 1px solid var(--go-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.md-typeset table:not([class]) th {
+  border-bottom: 1px solid var(--go-border);
+  background: var(--go-surface);
+  color: var(--go-text);
+}
+
+.md-typeset table:not([class]) td {
+  border-top: 1px solid var(--go-border-soft);
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background: var(--go-surface);
+  box-shadow: none;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--go-border);
+  border-radius: 0.4rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  border-bottom: 1px solid var(--go-border-soft);
+  background: var(--go-surface);
+  color: #cfcfcf;
+}
+
+.md-typeset .admonition-title::before,
+.md-typeset summary::before {
+  background-color: var(--go-text-muted) !important;
+}
+
+.md-typeset .tabbed-labels {
+  border-bottom-color: var(--go-border);
+}
+
+.md-typeset .tabbed-labels > label {
+  color: var(--go-text-subtle);
+}
+
+.md-typeset .tabbed-labels > label:hover {
+  color: var(--go-text);
+}
+
+.doc-heading {
+  scroll-margin-top: 4rem;
+}
+
+.doc-contents {
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--go-border-soft);
+}
+
+.doc-signature {
+  border: 1px solid var(--go-border) !important;
+  border-radius: 0.4rem !important;
+  background: var(--go-surface) !important;
+}
+
+.doc-label {
+  border: 1px solid var(--go-border);
+  background: var(--go-surface-raised);
+  color: var(--go-text-muted);
+}
+
+.md-footer {
+  border-top: 1px solid var(--go-border-soft);
+}
+
+.md-footer-meta {
+  border-top: 1px solid var(--go-border-soft);
+  background: var(--go-bg-deep);
+}
+
+.md-footer__link {
+  color: var(--go-text-muted);
+}
+
+.md-footer__link:hover {
+  color: var(--go-text);
+}
+
+body:has(.geneops-home) .md-tabs,
+body:has(.geneops-home) .md-header__source {
+  display: none;
+}
+
+body:has(.geneops-home) .md-main__inner {
+  max-width: none;
+  margin: 0;
+}
+
+body:has(.geneops-home) .md-content {
+  max-width: none;
+}
+
+body:has(.geneops-home) .md-content__inner {
+  margin: 0;
+  padding: 0;
+}
+
+body:has(.geneops-home) .md-content__inner::before {
+  display: none;
+}
+
+.geneops-home {
+  display: flex;
+  min-height: calc(100svh - 2.4rem);
+  align-items: center;
+  color: var(--go-text);
+}
+
+.geneops-home__hero {
+  width: min(100% - 3rem, 42rem);
+  margin: 0 auto;
+  padding: 4rem 0 7rem;
+}
+
+.md-typeset .geneops-home h1 {
+  margin: 0;
+  color: var(--go-text);
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.md-typeset .geneops-home__hero > p {
+  max-width: 36rem;
+  margin: 1rem 0 0;
+  color: var(--go-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.geneops-home__links {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1.75rem;
+}
+
+.md-typeset .geneops-home .geneops-home__links a {
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid #3a3a3a;
+  color: #d4d4d4;
+  font-size: 0.72rem;
+  font-weight: 550;
+  text-decoration: none;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.md-typeset .geneops-home .geneops-home__links a:hover {
+  border-color: #a0a0a0;
+  color: #ffffff;
+}
+
+.md-typeset .geneops-home .geneops-home__links a:focus-visible {
+  outline: 2px solid #8d8d8d;
+  outline-offset: 4px;
+}
+
+.geneops-home__install {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 1.8rem;
+  color: #555555;
+  font-family: var(--md-code-font);
+  font-size: 0.68rem;
+}
+
+.md-typeset .geneops-home__install code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #999999;
+  font-size: inherit;
+}
+
+.coordinate-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: hidden;
+  margin: 1.2rem 0;
+  border: 1px solid var(--go-border);
+  border-radius: 0.4rem;
+  text-align: center;
+}
+
+.coordinate-strip span {
+  padding: 0.7rem 0.35rem;
+  border-right: 1px solid var(--go-border);
+  background: var(--go-surface);
+  font-family: var(--md-code-font);
+}
+
+.coordinate-strip span:last-child {
+  border-right: 0;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-content__inner {
+    padding-top: 2rem;
+  }
+
+  .geneops-home__hero {
+    width: calc(100% - 2.5rem);
+    padding-bottom: 5rem;
+  }
+}

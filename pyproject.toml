@@ -53,9 +53,16 @@ dependencies = [
 
 ]
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs-material>=9.7.7,<10",
+    "mkdocstrings[python]>=1.0.6,<2",
+]
+
 [project.urls]
 Homepage = "https://linearfox.com"
 Repository = "https://github.com/ntfargo/geneops"
+Documentation = "https://geneops.linearfox.com/"
 
 [tool.setuptools]
 py-modules = []
