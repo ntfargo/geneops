@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geneops"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Unified Python toolkit for genome editing (CRISPR/prime/base): design, off-target scoring, QC, and analysis."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -68,3 +68,6 @@ Documentation = "https://geneops.linearfox.com/"
 py-modules = []
 packages = ["geneops", "geneops.utils"]
 package-dir = {"geneops" = "src"}
+
+[tool.setuptools.dynamic]
+version = {attr = "geneops._version.__version__"}

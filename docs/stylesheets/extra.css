@@ -111,6 +111,23 @@ body,
     width: 100%;
     max-width: none;
   }
+
+  [data-md-toggle="search"]:checked ~ .md-header .md-search__inner {
+    width: 100%;
+  }
+
+  .md-search__output {
+    inset-inline: 0;
+    width: auto;
+  }
+
+  .md-search__scrollwrap,
+  .md-search-result,
+  .md-search-result__meta,
+  .md-search-result__list {
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .md-main__inner {
@@ -349,15 +366,15 @@ body:has(.geneops-home) .md-content__inner::before {
 
 .geneops-home {
   display: flex;
+  flex-direction: column;
   min-height: calc(100svh - 2.4rem);
-  align-items: center;
   color: var(--go-text);
 }
 
 .geneops-home__hero {
   width: min(100% - 3rem, 42rem);
   margin: 0 auto;
-  padding: 4rem 0 7rem;
+  padding: 4rem 0 2.5rem;
 }
 
 .md-typeset .geneops-home h1 {
@@ -421,6 +438,104 @@ body:has(.geneops-home) .md-content__inner::before {
   font-size: inherit;
 }
 
+.geneops-home__docs {
+  width: min(100% - 3rem, 42rem);
+  margin: 0 auto;
+  padding: 1rem 0 6rem;
+}
+
+.md-typeset .geneops-home__docs h2 {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0;
+}
+
+.geneops-home__doc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.md-typeset .geneops-home__doc-grid a:not(.headerlink):not(.md-button) {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 5.8rem;
+  padding: 0.9rem;
+  border: 1px solid var(--go-border);
+  border-radius: 0.4rem;
+  background: var(--go-surface);
+  color: var(--go-text);
+  overflow: hidden;
+  text-decoration: none;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.md-typeset .geneops-home__doc-grid a:not(.headerlink):not(.md-button)::before {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    7rem circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.035) 35%,
+    transparent 70%
+  );
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.geneops-home__doc-grid a > * {
+  position: relative;
+  z-index: 1;
+}
+
+.md-typeset .geneops-home__doc-grid a:hover {
+  border-color: #555555;
+  background: var(--go-surface-raised);
+  box-shadow: 0 0.45rem 1.2rem rgba(0, 0, 0, 0.22);
+  transform: translateY(-2px);
+}
+
+.md-typeset .geneops-home__doc-grid a:hover::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .geneops-home__doc-grid a:not(.headerlink):not(.md-button),
+  .md-typeset .geneops-home__doc-grid a:not(.headerlink):not(.md-button)::before {
+    transition: none;
+  }
+
+  .md-typeset .geneops-home__doc-grid a:hover {
+    transform: none;
+  }
+}
+
+.geneops-home__doc-grid strong {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.geneops-home__doc-grid span {
+  margin-top: 0.35rem;
+  color: var(--go-text-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
+}
+
+.geneops-home__release {
+  margin: 0.65rem 0 0;
+  color: #666666;
+  font-family: var(--md-code-font);
+  font-size: 0.56rem !important;
+  letter-spacing: 0.04em;
+}
+
 .coordinate-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -449,6 +564,15 @@ body:has(.geneops-home) .md-content__inner::before {
 
   .geneops-home__hero {
     width: calc(100% - 2.5rem);
-    padding-bottom: 5rem;
+    padding-bottom: 2rem;
+  }
+
+  .geneops-home__docs {
+    width: calc(100% - 2.5rem);
+    padding-bottom: 4rem;
+  }
+
+  .geneops-home__doc-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -5,23 +5,42 @@ Use a custom [`Nuclease`][geneops.nuclease.Nuclease] when a variant is not prese
 ## Construct and validate
 
 ```python
-from geneops import Nuclease, validate_nuclease
-from geneops.nuclease import PAM
+from geneops import CleavagePattern, Nuclease, PAM, validate_nuclease
 
 custom = Nuclease(
-    name="MyCas9",
+    name="MyEditor",
     pam=PAM("NGA", "3'"),
+    cleavage=CleavagePattern(
+        pam_strand_offset=17,
+        target_strand_offset=17,
+    ),
     spacer_length=20,
-    description="An experimental Cas9-like variant",
+    description="An experimental editing nuclease",
 )
 
 validate_nuclease(custom)
 ```
 
-Using a `PAM` object makes the orientation explicit. A plain string is also accepted Geneops currently infers 5′ orientation for names containing `Cas12` or `Cpf1`, and 3′ orientation otherwise.
+Both targeting and cleavage behavior are explicit. Cleavage offsets are
+zero-based boundaries measured from the protospacer's 5′ end in PAM-strand
+orientation. Use `None` for a strand that is not cut.
 
 !!! tip
-    Prefer an explicit `PAM` object for custom enzymes. Name-based inference is convenient for common families but should not encode novel enzyme biology.
+    The nuclease name is only an identifier. Changing it never changes PAM
+    orientation or cleavage behavior.
+
+For example, a target-strand nickase uses a one-strand pattern:
+
+```python
+nickase = Nuclease(
+    name="MyNickase",
+    pam=PAM("NGG", "3'"),
+    cleavage=CleavagePattern(
+        pam_strand_offset=None,
+        target_strand_offset=17,
+    ),
+)
+```
 
 ## Use it directly
 

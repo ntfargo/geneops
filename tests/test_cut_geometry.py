@@ -16,6 +16,9 @@
 
 import pytest
 from geneops.nuclease import (
+    CleavagePattern,
+    Nuclease,
+    PAM,
     cut_offset,
     produces_blunt_cut,
     overhang_length,
@@ -40,6 +43,14 @@ class TestCutOffset:
         nuclease = get_nuclease("SpCas9")
         assert cut_offset(nuclease) == -3
 
+    def test_name_does_not_select_cut_behavior(self):
+        nuclease = Nuclease(
+            name="Cas12InNameOnly",
+            pam=PAM("NGG", "3'"),
+            cleavage=CleavagePattern(17, 17),
+        )
+        assert cut_offset(nuclease) == -3
+
 class TestProducesBluntCut:
     """Test produces_blunt_cut function."""
     
@@ -54,6 +65,15 @@ class TestProducesBluntCut:
         assert produces_blunt_cut("AsCas12a") is False
         assert produces_blunt_cut("LbCas12a") is False
 
+    def test_explicit_custom_geometry(self):
+        nuclease = Nuclease(
+            name="Aurora",
+            pam=PAM("TTTV", "5'"),
+            cleavage=CleavagePattern(18, 23),
+            spacer_length=23,
+        )
+        assert produces_blunt_cut(nuclease) is False
+
 class TestOverhangLength:
     """Test overhang_length function."""
     
@@ -66,6 +86,10 @@ class TestOverhangLength:
         """Cas12a has 5nt overhang."""
         assert overhang_length("AsCas12a") == 5
         assert overhang_length("LbCas12a") == 5
+
+    def test_nickase_has_no_double_strand_overhang(self):
+        with pytest.raises(ValueError, match="nickase"):
+            overhang_length("nCas9")
 
 class TestCutPosition:
     """Test cut_position function."""
@@ -96,6 +120,17 @@ class TestCutPosition:
         assert isinstance(result, tuple)
         top, bottom = result
         assert bottom - top == 5  # 5nt overhang
+
+    def test_reverse_strand_uses_explicit_offsets(self):
+        assert cut_position(30, "AsCas12a", "-") == (7, 12)
+
+    def test_custom_name_has_no_effect_on_cut_position(self):
+        nuclease = Nuclease(
+            name="NotCas12DespiteTheName",
+            pam=PAM("NGG", "3'"),
+            cleavage=CleavagePattern(17, 17),
+        )
+        assert cut_position(20, nuclease, "+") == 17
     
     def test_different_pam_positions(self):
         """Test with various PAM positions."""

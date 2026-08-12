@@ -1,6 +1,6 @@
 # Nucleases and PAMs
 
-A [`Nuclease`][geneops.nuclease.Nuclease] combines the constraints needed to interpret a candidate editing site: a name, PAM pattern, spacer length, PAM orientation, and whether the enzyme is a nickase.
+A [`Nuclease`][geneops.nuclease.Nuclease] combines the constraints needed to interpret a candidate editing site: a name, explicit PAM definition, spacer length, and explicit strand-cleavage pattern.
 
 ## Built-in registry
 
@@ -41,13 +41,17 @@ spcas9.matches_pam("TGG")  # True
 spcas9.matches_pam("AGA")  # False
 ```
 
-## Geometry assumptions
+## Explicit cleavage geometry
 
-The current cut model provides conventional family-level geometry:
+[`CleavagePattern`][geneops.nuclease.CleavagePattern] stores independent cut
+offsets for the PAM strand and target strand. Both are boundary offsets measured
+from the protospacer's 5′ end in PAM-strand orientation.
 
-- Cas9-family definitions use a 3′ PAM and a blunt cut three bases upstream of the PAM.
-- Cas12-family definitions use a 5′ PAM and return staggered boundaries with a five-nucleotide overhang.
-- Nickases report single-strand behavior through `is_nickase` and `nicking_offset`.
+- Equal offsets describe a blunt cut.
+- Different offsets describe a staggered cut; their absolute difference is the overhang length.
+- `None` on one strand describes a nickase.
 
-!!! warning "Model scope"
-    These are compact workflow defaults, not experimental-condition-specific cleavage models. Validate assumptions against the enzyme variant and assay used in your experiment.
+The built-in SpCas9 pattern is `(17, 17)` for its 20-nt protospacer. The
+built-in Cas12a patterns are `(18, 23)`. These values live in each registry
+entry; Geneops does not infer them from names such as `Cas9`, `Cas12`, or
+`Cpf1`.

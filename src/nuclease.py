@@ -45,19 +45,10 @@ def _reverse_complement(seq: str) -> str:
     return ''.join(list_sSeq)[::-1]
 
 def pam_orientation(nuclease: Nuclease | str) -> Literal["3'", "5'"]:
-    """Determine PAM orientation for a nuclease."""
-    # Forward reference - will be resolved at runtime
+    """Return the explicitly configured PAM orientation for a nuclease."""
     if isinstance(nuclease, str):
         nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    
-    name_lower = nuclease.name.lower()
-    
-    # Cas12 family (Cpf1) has 5' PAM
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return "5'"
-    
-    # Cas9 family and most others have 3' PAM
-    return "3'"
+    return nuclease.get_pam().orientation
 
 def matches_pam(seq: str, pam: PAM | str, orientation: Literal["3'", "5'"] = "3'") -> bool:
     if isinstance(pam, str):
@@ -108,20 +99,80 @@ class PAM:
                 sites.append(i)
         return sites
 
+
+@dataclass(frozen=True, slots=True)
+class CleavagePattern:
+    """Strand-specific cut offsets along the PAM-strand protospacer.
+
+    Both offsets are measured from the protospacer's 5' end in PAM-strand
+    orientation.  An offset is a boundary between bases: ``0`` is immediately
+    before the protospacer and ``spacer_length`` immediately after it.
+    ``None`` means that strand is not cut, allowing nickases to be represented
+    without a separate behavior flag.
+    """
+
+    pam_strand_offset: int | None
+    target_strand_offset: int | None
+
+    def __post_init__(self) -> None:
+        offsets = (self.pam_strand_offset, self.target_strand_offset)
+        if offsets == (None, None):
+            raise ValueError("CleavagePattern must cut at least one strand")
+        if any(
+            offset is not None
+            and (not isinstance(offset, int) or isinstance(offset, bool))
+            for offset in offsets
+        ):
+            raise TypeError("Cleavage offsets must be integers or None")
+
+    @property
+    def is_nickase(self) -> bool:
+        """Return whether exactly one DNA strand is cut."""
+        return (self.pam_strand_offset is None) != (
+            self.target_strand_offset is None
+        )
+
+    @property
+    def is_blunt(self) -> bool:
+        """Return whether both strands are cut at the same boundary."""
+        return (
+            self.pam_strand_offset is not None
+            and self.target_strand_offset is not None
+            and self.pam_strand_offset == self.target_strand_offset
+        )
+
+    @property
+    def overhang_length(self) -> int | None:
+        """Return staggered-cut length, or ``None`` for a nickase."""
+        if self.is_nickase:
+            return None
+        assert self.pam_strand_offset is not None
+        assert self.target_strand_offset is not None
+        return abs(self.pam_strand_offset - self.target_strand_offset)
+
+    @property
+    def nicking_strand(self) -> Literal["pam", "target"] | None:
+        """Return the cut strand for a nickase, otherwise ``None``."""
+        if not self.is_nickase:
+            return None
+        return "pam" if self.pam_strand_offset is not None else "target"
+
+
 @dataclass(frozen=True, slots=True)
 class Nuclease:
+    """A nuclease with explicit targeting and strand-cleavage behavior."""
+
     name: str
-    pam: PAM | str
+    pam: PAM
+    cleavage: CleavagePattern
     spacer_length: int = 20
-    nickase: bool = False
     description: str | None = None
 
     def get_pam(self) -> PAM:
-        """Return a PAM object for this nuclease."""
-        if isinstance(self.pam, PAM):
-            return self.pam
-        # If pam is a string, determine orientation based on nuclease type
-        return PAM(self.pam, pam_orientation(self))
+        """Return this nuclease's explicit PAM definition."""
+        if not isinstance(self.pam, PAM):
+            raise TypeError("Nuclease.pam must be a PAM instance")
+        return self.pam
     
     def pam_length(self) -> int:
         """Return the length of the PAM sequence."""
@@ -164,27 +215,30 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SpCas9",
         pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="Streptococcus pyogenes Cas9",
     ),
     Nuclease(
         name="nCas9",
         pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(None, 17),
         spacer_length=20,
-        nickase=True,
-        description="SpCas9 nickase variant (D10A/H840A)",
+        description="SpCas9 D10A nickase; cuts the target strand",
     ),
 
     # --- High-fidelity Cas9 ---
     Nuclease(
         name="SpCas9-HF1",
         pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="High-fidelity SpCas9 variant",
     ),
     Nuclease(
         name="eSpCas9",
         pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="Enhanced-specificity SpCas9",
     ),
@@ -193,18 +247,21 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SpCas9-NG",
         pam=PAM("NG", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="SpCas9 variant recognizing NG PAMs",
     ),
     Nuclease(
         name="SpG",
         pam=PAM("NGN", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="Engineered SpCas9 with relaxed PAM",
     ),
     Nuclease(
         name="SpRY",
         pam=PAM("NRN", "3'"),
+        cleavage=CleavagePattern(17, 17),
         spacer_length=20,
         description="Near-PAMless SpCas9 variant (context-dependent efficiency)"
     ),
@@ -213,18 +270,21 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="SaCas9",
         pam=PAM("NNGRRT", "3'"),
+        cleavage=CleavagePattern(18, 18),
         spacer_length=21,
         description="Staphylococcus aureus Cas9",
     ),
     Nuclease(
         name="NmCas9",
         pam=PAM("NNNNGATT", "3'"),
+        cleavage=CleavagePattern(21, 21),
         spacer_length=24,
         description="Neisseria meningitidis Cas9",
     ),
     Nuclease(
         name="CjCas9",
         pam=PAM("NNNNRYAC", "3'"),
+        cleavage=CleavagePattern(19, 19),
         spacer_length=22,
         description="Campylobacter jejuni Cas9",
     ),
@@ -233,12 +293,14 @@ _DEFAULT_NUCLEASES = (
     Nuclease(
         name="AsCas12a",
         pam=PAM("TTTV", "5'"),
+        cleavage=CleavagePattern(18, 23),
         spacer_length=23,
         description="Acidaminococcus Cas12a (Cpf1)",
     ),
     Nuclease(
         name="LbCas12a",
         pam=PAM("TTTV", "5'"),
+        cleavage=CleavagePattern(18, 23),
         spacer_length=23,
         description="Lachnospiraceae Cas12a (Cpf1)",
     ),
@@ -260,72 +322,69 @@ def list_nucleases() -> List[str]:
     """Enumerate supported nucleases from the default registry."""
     return DEFAULT_REGISTRY.list_nucleases()
 
-def is_nickase(nuclease: Nuclease | str) -> bool:
+def _resolve_nuclease(nuclease: Nuclease | str) -> Nuclease:
+    """Resolve a registry name while leaving explicit objects intact."""
     if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    return nuclease.nickase
+        return DEFAULT_REGISTRY.get_nuclease(nuclease)
+    return nuclease
+
+
+def _offset_from_pam(nuclease: Nuclease, protospacer_offset: int) -> int:
+    """Convert a protospacer offset to the legacy PAM-relative form."""
+    if pam_orientation(nuclease) == "3'":
+        return protospacer_offset - nuclease.spacer_length
+    return protospacer_offset
+
+
+def is_nickase(nuclease: Nuclease | str) -> bool:
+    """Return whether ``nuclease`` cuts exactly one DNA strand."""
+    nuclease = _resolve_nuclease(nuclease)
+    return nuclease.cleavage.is_nickase
 
 def nicking_offset(nuclease: Nuclease | str) -> int:
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-
-    if not nuclease.nickase:
+    """Return a nickase's cut offset relative to the PAM boundary."""
+    nuclease = _resolve_nuclease(nuclease)
+    if not is_nickase(nuclease):
         raise ValueError(
             f"{nuclease.name} is not a nickase; use cut_offset() for "
             f"double-strand nucleases"
         )
 
-    name_lower = nuclease.name.lower()
-
-    # Cas12-family nickase
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return 18
-
-    # Cas9-family nickase (D10A / H840A) – nick at −3 from PAM
-    return -3
+    offset = nuclease.cleavage.pam_strand_offset
+    if offset is None:
+        offset = nuclease.cleavage.target_strand_offset
+    assert offset is not None
+    return _offset_from_pam(nuclease, offset)
 
 def cut_offset(nuclease: Nuclease | str) -> int:
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    
-    name_lower = nuclease.name.lower()
-    
-    # Cas12 family cuts downstream of PAM (in the protospacer)
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return 18  # Typical Cas12a cut position
-    
-    # Cas9 family cuts 3bp upstream of PAM (between protospacer and PAM)
-    return -3
+    """Return the PAM-strand cut offset relative to the PAM boundary.
+
+    This compatibility helper projects the explicit cleavage pattern into the
+    older PAM-relative convention. Use ``Nuclease.cleavage`` when strand
+    identity matters.
+    """
+    nuclease = _resolve_nuclease(nuclease)
+    if is_nickase(nuclease):
+        raise ValueError(
+            f"{nuclease.name} is a nickase; use nicking_offset() instead"
+        )
+
+    offset = nuclease.cleavage.pam_strand_offset
+    assert offset is not None
+    return _offset_from_pam(nuclease, offset)
 
 def produces_blunt_cut(nuclease: Nuclease | str) -> bool:
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    
-    # Nickases cut only one strand → never blunt
-    if nuclease.nickase:
-        return False
-    
-    name_lower = nuclease.name.lower()
-    
-    # Cas12 family produces staggered cuts
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return False
-    
-    # Cas9 family produces blunt cuts
-    return True
+    """Return whether both strand cuts occur at the same boundary."""
+    nuclease = _resolve_nuclease(nuclease)
+    return nuclease.cleavage.is_blunt
 
 def overhang_length(nuclease: Nuclease | str) -> int:
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    
-    name_lower = nuclease.name.lower()
-    
-    # Cas12 family produces 5nt 5' overhangs
-    if 'cas12' in name_lower or 'cpf1' in name_lower:
-        return 5
-    
-    # Cas9 produces blunt cuts (0 overhang)
-    return 0
+    """Return the distance between the two strand cuts."""
+    nuclease = _resolve_nuclease(nuclease)
+    length = nuclease.cleavage.overhang_length
+    if length is None:
+        raise ValueError(f"{nuclease.name} is a nickase and has no overhang")
+    return length
 
 def cut_position(
     pam_index: int,
@@ -338,40 +397,46 @@ def cut_position(
     reference, and ``pam_strand`` is the strand containing the recognized PAM.
     A blunt cut returns one boundary; a staggered cut returns two boundaries.
     """
-    if isinstance(nuclease, str):
-        nuclease = DEFAULT_REGISTRY.get_nuclease(nuclease)
-    if pam_strand not in ("+", "-"):
+    nuclease = _resolve_nuclease(nuclease)
+    if pam_strand not in {"+", "-"}:
         raise ValueError(
             f"pam_strand must be '+' or '-', got {pam_strand!r}"
         )
-    
-    offset = cut_offset(nuclease)
+
     orientation = pam_orientation(nuclease)
-    
-    # For 3' PAM (like Cas9): PAM is downstream, cut is upstream
-    if orientation == "3'":
-        if pam_strand == "+":
-            cut_pos = pam_index + offset
-        else:
-            # The reverse-strand protospacer lies to the right in reference
-            # coordinates, so measure from the PAM's right boundary.
-            pam_len = nuclease.pam_length()
-            cut_pos = pam_index + pam_len - offset
-    
-    # For 5' PAM (like Cas12a): PAM is upstream, cut is downstream
+    pam_len = nuclease.pam_length()
+
+    if pam_strand == "+":
+        protospacer_start = (
+            pam_index - nuclease.spacer_length
+            if orientation == "3'"
+            else pam_index + pam_len
+        )
+
+        def position(offset: int) -> int:
+            return protospacer_start + offset
+
     else:
-        if pam_strand == "+":
-            pam_len = nuclease.pam_length()
-            cut_pos = pam_index + pam_len + offset
-        else:
-            cut_pos = pam_index - offset
-    
-    # Return single position or tuple depending on cut type
-    if produces_blunt_cut(nuclease):
-        return cut_pos
-    else:
-        overhang = overhang_length(nuclease)
-        return (cut_pos, cut_pos + overhang)
+        protospacer_start = (
+            pam_index + pam_len + nuclease.spacer_length
+            if orientation == "3'"
+            else pam_index
+        )
+
+        def position(offset: int) -> int:
+            return protospacer_start - offset
+
+    positions = [
+        position(offset)
+        for offset in (
+            nuclease.cleavage.pam_strand_offset,
+            nuclease.cleavage.target_strand_offset,
+        )
+        if offset is not None
+    ]
+    if len(positions) == 1 or positions[0] == positions[1]:
+        return positions[0]
+    return tuple(sorted(positions))
 
 
 def guide_length(nuclease: Nuclease | str) -> int:
@@ -443,18 +508,14 @@ def validate_nuclease(nuclease: Nuclease) -> None:
             f"Expected a Nuclease instance, got {type(nuclease).__name__}"
         )
 
-    if not nuclease.name or not nuclease.name.strip():
+    if not isinstance(nuclease.name, str) or not nuclease.name.strip():
         raise ValueError("Nuclease name must be a non-empty string")
 
-    pam_pattern: str
-    if isinstance(nuclease.pam, PAM):
-        pam_pattern = nuclease.pam.pattern
-    elif isinstance(nuclease.pam, str):
-        pam_pattern = nuclease.pam
-    else:
-        raise ValueError(
-            f"PAM must be a PAM object or a string, got {type(nuclease.pam).__name__}"
+    if not isinstance(nuclease.pam, PAM):
+        raise TypeError(
+            f"PAM must be a PAM instance, got {type(nuclease.pam).__name__}"
         )
+    pam_pattern = nuclease.pam.pattern
 
     if not pam_pattern:
         raise ValueError("PAM pattern must not be empty")
@@ -467,20 +528,25 @@ def validate_nuclease(nuclease: Nuclease) -> None:
             f"PAM pattern contains invalid IUPAC character(s): "
             f"{sorted(invalid_chars)}"
         )
-    if not isinstance(nuclease.spacer_length, int) or nuclease.spacer_length < 17 or nuclease.spacer_length > 30:
+    if nuclease.pam.orientation not in {"3'", "5'"}:
+        raise ValueError(
+            "PAM orientation must be \"3'\" or \"5'\", "
+            f"got {nuclease.pam.orientation!r}"
+        )
+    if (
+        not isinstance(nuclease.spacer_length, int)
+        or isinstance(nuclease.spacer_length, bool)
+        or nuclease.spacer_length < 17
+        or nuclease.spacer_length > 30
+    ):
         raise ValueError(
             f"spacer_length must be an integer in 17–30, "
             f"got {nuclease.spacer_length}"
         )
-    offset = cut_offset(nuclease)
-    if abs(offset) > nuclease.spacer_length:
-        raise ValueError(
-            f"cut offset ({offset}) falls outside the guide range "
-            f"(spacer_length={nuclease.spacer_length})"
-        )
-    if nuclease.nickase and produces_blunt_cut(nuclease):
-        raise ValueError(
-            "Nickase nucleases should not produce blunt (double-strand) cuts"
+    if not isinstance(nuclease.cleavage, CleavagePattern):
+        raise TypeError(
+            "cleavage must be a CleavagePattern instance, "
+            f"got {type(nuclease.cleavage).__name__}"
         )
 
 def recognizes_strand(nuclease: Nuclease | str) -> Literal["+", "-", "both"]:

@@ -189,7 +189,7 @@ class TestCutSite:
             ("SpCas9", Interval(20, 23), "+", 17),
             ("SpCas9", Interval(10, 13), "-", 16),
             ("AsCas12a", Interval(10, 14), "+", (32, 37)),
-            ("AsCas12a", Interval(30, 34), "-", (12, 17)),
+            ("AsCas12a", Interval(30, 34), "-", (7, 12)),
         ],
     )
     def test_cut_boundaries_use_forward_coordinates(

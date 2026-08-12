@@ -1,6 +1,7 @@
 import pytest
 
 from geneops.nuclease import (
+    CleavagePattern,
     Nuclease,
     PAM,
     RRegistry,
@@ -26,6 +27,34 @@ from geneops.nuclease import (
 def spcas9():
     return get_nuclease("SpCas9")
 
+
+# --- Cleavage pattern tests ---
+
+def test_cleavage_pattern_derives_cut_type_and_overhang():
+    blunt = CleavagePattern(17, 17)
+    staggered = CleavagePattern(18, 23)
+    nickase = CleavagePattern(None, 17)
+
+    assert blunt.is_blunt is True
+    assert blunt.overhang_length == 0
+    assert staggered.is_blunt is False
+    assert staggered.overhang_length == 5
+    assert nickase.is_nickase is True
+    assert nickase.nicking_strand == "target"
+    assert nickase.overhang_length is None
+
+
+def test_cleavage_pattern_requires_at_least_one_cut():
+    with pytest.raises(ValueError, match="at least one strand"):
+        CleavagePattern(None, None)
+
+
+@pytest.mark.parametrize("offset", [True, 1.5, "17"])
+def test_cleavage_pattern_rejects_non_integer_offsets(offset):
+    with pytest.raises(TypeError, match="integers or None"):
+        CleavagePattern(offset, 17)
+
+
 # --- Registry tests ---
 
 def test_list_nucleases_contains_defaults():
@@ -42,13 +71,31 @@ def test_get_nuclease_case_insensitive():
 
 def test_register_nuclease_adds_to_registry():
     registry = RRegistry()
-    registry.register_nuclease(Nuclease(name="AsCas12a", pam="TTTV"))
+    registry.register_nuclease(
+        Nuclease(
+            name="AsCas12a",
+            pam=PAM("TTTV", "5'"),
+            cleavage=CleavagePattern(18, 23),
+            spacer_length=23,
+        )
+    )
     assert registry.get_nuclease("AsCas12a").pam == "TTTV"
 
 def test_register_duplicate_raises():
-    registry = RRegistry([Nuclease(name="SpCas9", pam="NGG")])
+    spcas9 = Nuclease(
+        name="SpCas9",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
+    registry = RRegistry([spcas9])
     with pytest.raises(ValueError):
-        registry.register_nuclease(Nuclease(name="spcas9", pam="NGG"))
+        registry.register_nuclease(
+            Nuclease(
+                name="spcas9",
+                pam=PAM("NGG", "3'"),
+                cleavage=CleavagePattern(17, 17),
+            )
+        )
 
 def test_get_unknown_raises():
     registry = RRegistry()
@@ -99,7 +146,8 @@ def test_find_pams_with_custom_nuclease():
 
     custom = Nuclease(
         name="MyCas9",
-        pam="NGA",
+        pam=PAM("NGA", "3'"),
+        cleavage=CleavagePattern(17, 17),
         description="Custom engineered Cas9 variant",
     )
     register_nuclease(custom)
@@ -220,14 +268,21 @@ def test_pam_orientation_with_nuclease_object():
     assert pam_orientation(cas12a) == "5'"
 
 def test_pam_orientation_custom_nuclease():
-    """Test pam_orientation with custom nuclease objects."""
-    # Custom Cas9-like nuclease
-    custom_cas9 = Nuclease(name="CustomCas9", pam="NGG")
-    assert pam_orientation(custom_cas9) == "3'"
-    
-    # Custom Cas12-like nuclease
-    custom_cas12 = Nuclease(name="CustomCas12a", pam="TTTV")
-    assert pam_orientation(custom_cas12) == "5'"
+    """Names do not influence an explicitly configured PAM orientation."""
+    named_like_cas12 = Nuclease(
+        name="DefinitelyCas12",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
+    arbitrary_name = Nuclease(
+        name="Aurora",
+        pam=PAM("TTTV", "5'"),
+        cleavage=CleavagePattern(18, 23),
+        spacer_length=23,
+    )
+
+    assert pam_orientation(named_like_cas12) == "3'"
+    assert pam_orientation(arbitrary_name) == "5'"
 
 def test_guide_length_cas9():
     """Test that SpCas9 variants require 20nt guides."""
@@ -256,7 +311,12 @@ def test_guide_length_with_nuclease_object():
 
 def test_guide_length_custom_nuclease():
     """Test guide_length with custom nuclease with explicit spacer_length."""
-    custom = Nuclease(name="CustomNuclease", pam="NGG", spacer_length=18)
+    custom = Nuclease(
+        name="CustomNuclease",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(15, 15),
+        spacer_length=18,
+    )
     assert guide_length(custom) == 18
 
 def test_is_guide_length_valid_cas9():
@@ -410,45 +470,91 @@ def test_validate_nuclease_accepts_valid_cas12a():
     validate_nuclease(cas12a)  # should not raise
 
 def test_validate_nuclease_accepts_custom_nuclease():
-    custom = Nuclease(name="TestNuc", pam=PAM("NGG", "3'"), spacer_length=20)
+    custom = Nuclease(
+        name="TestNuc",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+        spacer_length=20,
+    )
     validate_nuclease(custom)
 
-def test_validate_nuclease_accepts_string_pam():
-    """Nuclease with a plain string PAM should also pass."""
-    nuc = Nuclease(name="PlainPAM", pam="NGG", spacer_length=20)
-    validate_nuclease(nuc)
+def test_validate_nuclease_rejects_string_pam():
+    """Implicit PAM orientation is not accepted."""
+    nuc = Nuclease(
+        name="PlainPAM",
+        pam="NGG",  # type: ignore[arg-type]
+        cleavage=CleavagePattern(17, 17),
+    )
+    with pytest.raises(TypeError, match="PAM must be a PAM instance"):
+        validate_nuclease(nuc)
+
+
+def test_validate_nuclease_rejects_implicit_cleavage_tuple():
+    nuc = Nuclease(
+        name="TupleCuts",
+        pam=PAM("NGG", "3'"),
+        cleavage=(17, 17),  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError, match="CleavagePattern instance"):
+        validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_non_nuclease():
     with pytest.raises(TypeError, match="Expected a Nuclease"):
         validate_nuclease("SpCas9")
 
 def test_validate_nuclease_rejects_empty_name():
-    nuc = Nuclease(name="", pam="NGG", spacer_length=20)
+    nuc = Nuclease(
+        name="",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
     with pytest.raises(ValueError, match="name must be a non-empty"):
         validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_whitespace_name():
-    nuc = Nuclease(name="   ", pam="NGG", spacer_length=20)
+    nuc = Nuclease(
+        name="   ",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
     with pytest.raises(ValueError, match="name must be a non-empty"):
         validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_invalid_iupac_pam():
-    nuc = Nuclease(name="BadPAM", pam=PAM("XZQ", "3'"), spacer_length=20)
+    nuc = Nuclease(
+        name="BadPAM",
+        pam=PAM("XZQ", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
     with pytest.raises(ValueError, match="invalid IUPAC"):
         validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_empty_pam():
-    nuc = Nuclease(name="EmptyPAM", pam="", spacer_length=20)
+    nuc = Nuclease(
+        name="EmptyPAM",
+        pam=PAM("", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
     with pytest.raises(ValueError, match="PAM pattern must not be empty"):
         validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_short_spacer():
-    nuc = Nuclease(name="TooShort", pam="NGG", spacer_length=10)
+    nuc = Nuclease(
+        name="TooShort",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(7, 7),
+        spacer_length=10,
+    )
     with pytest.raises(ValueError, match="spacer_length"):
         validate_nuclease(nuc)
 
 def test_validate_nuclease_rejects_long_spacer():
-    nuc = Nuclease(name="TooLong", pam="NGG", spacer_length=35)
+    nuc = Nuclease(
+        name="TooLong",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(32, 32),
+        spacer_length=35,
+    )
     with pytest.raises(ValueError, match="spacer_length"):
         validate_nuclease(nuc)
 
@@ -480,11 +586,19 @@ def test_is_nickase_with_nuclease_object():
     assert is_nickase(nuc2) is False
 
 def test_is_nickase_custom_nickase():
-    custom = Nuclease(name="MyNickase", pam="NGG", nickase=True)
+    custom = Nuclease(
+        name="MyNickase",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(None, 17),
+    )
     assert is_nickase(custom) is True
 
 def test_is_nickase_custom_full_nuclease():
-    custom = Nuclease(name="MyNuclease", pam="NGG", nickase=False)
+    custom = Nuclease(
+        name="MyNuclease",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(17, 17),
+    )
     assert is_nickase(custom) is False
 
 def test_nicking_offset_ncas9():
@@ -496,11 +610,20 @@ def test_nicking_offset_with_nuclease_object():
     assert nicking_offset(nuc) == -3
 
 def test_nicking_offset_custom_cas9_nickase():
-    custom = Nuclease(name="D10A-Cas9", pam="NGG", nickase=True)
+    custom = Nuclease(
+        name="D10A-Cas9",
+        pam=PAM("NGG", "3'"),
+        cleavage=CleavagePattern(None, 17),
+    )
     assert nicking_offset(custom) == -3
 
 def test_nicking_offset_custom_cas12_nickase():
-    custom = Nuclease(name="nCas12a", pam="TTTV", nickase=True)
+    custom = Nuclease(
+        name="Aurora",
+        pam=PAM("TTTV", "5'"),
+        cleavage=CleavagePattern(18, None),
+        spacer_length=23,
+    )
     assert nicking_offset(custom) == 18
 
 def test_nicking_offset_raises_for_full_nuclease():

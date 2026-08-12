@@ -29,9 +29,11 @@ nav:
   - Home: index.md
   - Get started: getting-started.md
   - Concepts:
+      - Overview: concepts/index.md
       - Coordinates and strands: concepts/coordinates.md
       - Nucleases and PAMs: concepts/nucleases.md
   - Guides:
+      - Overview: guides/index.md
       - Discover guides: guides/discover-guides.md
       - Define a custom nuclease: guides/custom-nuclease.md
   - API reference:

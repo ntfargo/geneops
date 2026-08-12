@@ -18,6 +18,6 @@ from geneops import (
 
 Module-specific helpers are documented in the following sections:
 
-- [Coordinates](coordinates.md) — intervals and strand operations
-- [Guides](guide.md) — sequence normalization, discovery, and guide objects
-- [Nucleases](nuclease.md) — PAM definitions, registries, and cut geometry
+- [Coordinates](coordinates.md) intervals and strand operations
+- [Guides](guide.md) sequence normalization, discovery, and guide objects
+- [Nucleases](nuclease.md) PAM definitions, registries, and cut geometry

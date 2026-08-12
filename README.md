@@ -28,14 +28,21 @@ python3 -m venv .venv
 
 ## Documentation
 
-The documentation source lives in [`docs/`](docs/)
+Public running docs: [geneops.linearfox.com](https://geneops.linearfox.com/).
+
+- [Get started](https://geneops.linearfox.com/getting-started/)
+- [Guide discovery](https://geneops.linearfox.com/guides/discover-guides/)
+- [Nucleases and PAMs](https://geneops.linearfox.com/concepts/nucleases/)
+- [Coordinate conventions](https://geneops.linearfox.com/concepts/coordinates/)
+- [Custom nucleases](https://geneops.linearfox.com/guides/custom-nuclease/)
+- [API reference](https://geneops.linearfox.com/reference/)
+
+Documentation source lives in [`docs/`](docs/).
 
 ```bash
 .venv/bin/python -m pip install -e ".[docs]"
 .venv/bin/python -m mkdocs serve
 ```
-
-Public running docs: https://geneops.linearfox.com/
 
 Contributions are welcome! Please open issues or pull requests on the GitHub repository.
 

@@ -14,12 +14,14 @@
 
 """geneops src base"""
 
-__version__ = "0.0.1"
+from ._version import __version__
 
 from .coordinates import Interval, Strand, opposite_strand
 
 from .nuclease import (
+    CleavagePattern,
     Nuclease,
+    PAM,
     RRegistry,
     get_nuclease,
     list_nucleases,
@@ -48,7 +50,9 @@ __all__ = [
     "Strand",
     "opposite_strand",
     # nuclease
+    "CleavagePattern",
     "Nuclease",
+    "PAM",
     "RRegistry",
     "get_nuclease",
     "list_nucleases",
