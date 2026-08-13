@@ -21,13 +21,11 @@ custom = Nuclease(
 validate_nuclease(custom)
 ```
 
-Both targeting and cleavage behavior are explicit. Cleavage offsets are
+Both targeting and nominal cleavage geometry are explicit. Cleavage offsets are
 zero-based boundaries measured from the protospacer's 5′ end in PAM-strand
-orientation. Use `None` for a strand that is not cut.
-
-!!! tip
-    The nuclease name is only an identifier. Changing it never changes PAM
-    orientation or cleavage behavior.
+orientation. Use `None` for a strand that is not cut. Choose offsets from an
+appropriate experimental source and document when they are canonical rather
+than exact measurements for the target being analyzed.
 
 For example, a target-strand nickase uses a one-strand pattern:
 

@@ -104,6 +104,20 @@ def test_get_unknown_raises():
 
 # --- PAM matching tests ---
 
+def test_pam_equality_is_structural_and_hash_compatible():
+    pam = PAM("NGG", "3'")
+
+    assert pam == PAM("NGG", "3'")
+    assert pam != PAM("NGG", "5'")
+    assert pam == "NGG"
+    assert "NGG" == pam
+    assert hash(pam) == hash("NGG")
+    assert len({pam, PAM("NGG", "3'")}) == 1
+    assert len({pam, "NGG"}) == 1
+
+def test_pam_equality_returns_false_for_unrelated_types():
+    assert PAM("NGG", "3'") != object()
+
 def test_pam_exact_match():
     sp = get_nuclease("SpCas9")
     assert sp.matches_pam("AGG")

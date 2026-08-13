@@ -27,7 +27,7 @@ assert guide.pam == "TGG"
 assert tuple(guide.pam_interval) == (30, 33)
 assert tuple(guide.protospacer_interval) == (10, 30)
 assert guide.target_strand == "-"
-assert guide.cut_site() == 27
+assert guide.cut_site().boundaries == (27,)
 ```
 
 ## Cas12a: a 5′ PAM
@@ -51,7 +51,8 @@ guide = find_guides(
 assert guide.sequence == spacer
 assert tuple(guide.pam_interval) == (10, 14)
 assert tuple(guide.protospacer_interval) == (14, 37)
-assert guide.cut_site() == (32, 37)
+assert guide.cut_site().boundaries == (32, 37)
+assert guide.cut_site().overhang == "5'"
 ```
 
 ## Handle ambiguous target bases
@@ -79,3 +80,22 @@ filtered = [
 ```
 
 More advanced activity and off-target scores belong to later roadmap phases. Keeping discovery and scoring separate lets a workflow choose the model appropriate for its assay.
+
+## Keep genome coordinates
+
+Wrap a reference slice in [`SequenceContext`][geneops.target.SequenceContext] to preserve its assembly, contig, and coordinate offset:
+
+```python
+from geneops import Interval, SequenceContext
+
+context = SequenceContext(
+    target,
+    Interval(1_000, 1_000 + len(target)),
+    reference="GRCh38",
+    contig="chr7",
+)
+
+guides = find_guides(context, get_nuclease("AsCas12a"))
+```
+
+Every returned guide retains this context through `guide.context` and exposes a validated `guide.target_site`.

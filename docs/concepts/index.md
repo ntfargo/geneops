@@ -5,5 +5,7 @@ uses throughout its guide-design APIs.
 
 - [Coordinates and strands](coordinates.md) zero-based, half-open intervals
   and explicit strand labels.
+- [Sequence context and target sites](targets.md) reference-aware sequences,
+  validated protospacer/PAM sites, and model input sequence windows.
 - [Nucleases and PAMs](nucleases.md) PAM recognition and explicit
   strand-specific cleavage geometry.

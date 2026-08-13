@@ -22,6 +22,7 @@ from geneops.nuclease import (
     cut_offset,
     produces_blunt_cut,
     overhang_length,
+    calculate_cut_site,
     cut_position,
     get_nuclease,
 )
@@ -143,6 +144,38 @@ class TestCutPosition:
         # Position 50 with Cas12a
         top, bottom = cut_position(50, "AsCas12a", "+")
         assert bottom - top == 5
+
+
+class TestCalculateCutSite:
+    def test_preserves_strand_identity_for_forward_cas12a(self):
+        site = calculate_cut_site(10, "AsCas12a", "+")
+
+        assert site.pam_strand_boundary == 32
+        assert site.target_strand_boundary == 37
+        assert site.plus_strand_boundary == 32
+        assert site.minus_strand_boundary == 37
+        assert site.boundaries == (32, 37)
+        assert site.overhang_length == 5
+        assert site.overhang == "5'"
+
+    def test_maps_strand_identity_for_reverse_cas12a(self):
+        site = calculate_cut_site(30, "AsCas12a", "-")
+
+        assert site.pam_strand_boundary == 12
+        assert site.target_strand_boundary == 7
+        assert site.plus_strand_boundary == 7
+        assert site.minus_strand_boundary == 12
+        assert site.boundaries == (7, 12)
+        assert site.overhang == "5'"
+
+    def test_nickase_identifies_cut_reference_strand(self):
+        site = calculate_cut_site(20, "nCas9", "+")
+
+        assert site.is_nickase
+        assert site.pam_strand_boundary is None
+        assert site.target_strand_boundary == 17
+        assert site.nicking_strand == "-"
+        assert site.overhang_length is None
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

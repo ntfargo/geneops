@@ -16,7 +16,7 @@
 
 from ._version import __version__
 
-from .coordinates import Interval, Strand, opposite_strand
+from .coordinates import CutSite, Interval, Overhang, Strand, opposite_strand
 
 from .nuclease import (
     CleavagePattern,
@@ -28,12 +28,15 @@ from .nuclease import (
     register_nuclease,
     is_nickase,
     nicking_offset,
+    calculate_cut_site,
     cut_position,
     cut_offset,
     produces_blunt_cut,
     overhang_length,
     validate_nuclease,
 )
+
+from .target import SequenceContext, TargetSite
 
 from .guide import (
     Guide,
@@ -47,8 +50,13 @@ from .guide import (
 __all__ = [
     # coordinates
     "Interval",
+    "CutSite",
+    "Overhang",
     "Strand",
     "opposite_strand",
+    # target
+    "SequenceContext",
+    "TargetSite",
     # nuclease
     "CleavagePattern",
     "Nuclease",
@@ -59,6 +67,7 @@ __all__ = [
     "register_nuclease",
     "is_nickase",
     "nicking_offset",
+    "calculate_cut_site",
     "cut_position",
     "cut_offset",
     "produces_blunt_cut",

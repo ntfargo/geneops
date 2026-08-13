@@ -29,11 +29,11 @@ for guide in find_guides(target, nuclease):
         guide.pam,
         guide.pam_strand,
         guide.protospacer_interval,
-        guide.cut_site(),
+        guide.cut_site().boundaries,
     )
 ```
 
-`find_guides` returns [`Guide`][geneops.guide.Guide] objects rather than bare strings. Each result carries the nuclease, observed PAM, strand, reference interval, and cut geometry needed by later workflow stages.
+`find_guides` returns [`Guide`][geneops.guide.Guide] objects rather than bare strings. Each result carries the nuclease, observed PAM, strand, reference interval, and configured nominal cut geometry needed by later workflow stages.
 
 ## Filter by PAM strand
 
@@ -60,4 +60,4 @@ print(cas12a.get_pam().orientation)   # 5'
 print(cas12a.spacer_length)           # 23
 ```
 
-Continue with [guide discovery](guides/discover-guides.md), or learn the library's [coordinate conventions](concepts/coordinates.md) before integrating Geneops with genomic files.
+Continue with [guide discovery](guides/discover-guides.md), learn how to preserve [sequence context and target identity](concepts/targets.md), or review the [coordinate conventions](concepts/coordinates.md) before integrating Geneops with genomic files.

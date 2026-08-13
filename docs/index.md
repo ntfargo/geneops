@@ -23,7 +23,7 @@ hide:
   <code>pip install git+https://github.com/ntfargo/geneops.git</code>
 </div>
 
-<p class="geneops-home__release">0.0.5</p>
+<p class="geneops-home__release">0.0.6</p>
 
 </section>
 
@@ -42,7 +42,7 @@ hide:
   </a>
   <a href="concepts/nucleases/">
     <strong>Nucleases and PAMs</strong>
-    <span>Model targeting and explicit cleavage geometry.</span>
+    <span>Model targeting and explicit nominal cleavage geometry.</span>
   </a>
   <a href="concepts/coordinates/">
     <strong>Coordinates and strands</strong>

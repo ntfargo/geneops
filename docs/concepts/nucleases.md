@@ -41,17 +41,17 @@ spcas9.matches_pam("TGG")  # True
 spcas9.matches_pam("AGA")  # False
 ```
 
-## Explicit cleavage geometry
+## Explicit nominal cleavage geometry
 
 [`CleavagePattern`][geneops.nuclease.CleavagePattern] stores independent cut
-offsets for the PAM strand and target strand. Both are boundary offsets measured
+configured offsets for the PAM strand and target strand. Both are boundary offsets measured
 from the protospacer's 5′ end in PAM-strand orientation.
 
 - Equal offsets describe a blunt cut.
 - Different offsets describe a staggered cut; their absolute difference is the overhang length.
 - `None` on one strand describes a nickase.
 
-The built-in SpCas9 pattern is `(17, 17)` for its 20-nt protospacer. The
-built-in Cas12a patterns are `(18, 23)`. These values live in each registry
-entry; Geneops does not infer them from names such as `Cas9`, `Cas12`, or
-`Cpf1`.
+The built-in SpCas9 pattern is the canonical `(17, 17)` geometry for its 20-nt
+protospacer. The built-in Cas12a patterns use canonical `(18, 23)` boundaries.
+These values live in each registry entry; Geneops does not infer them from names
+such as `Cas9`, `Cas12`, or `Cpf1`.

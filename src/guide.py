@@ -17,13 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .coordinates import Interval, Strand, opposite_strand
+from .coordinates import CutSite, Interval, Strand, opposite_strand
 
 from .nuclease import (
     Nuclease,
-    cut_position,
     pam_orientation,
 )
+from .target import SequenceContext, TargetSite
 
 _VALID_DNA_BASES = frozenset("ACGT")
 _VALID_TARGET_BASES = frozenset("ACGTN")
@@ -31,6 +31,8 @@ _VALID_TARGET_BASES = frozenset("ACGTN")
 _COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
 
 def normalize(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Sequence must be a string")
     seq = seq.upper().replace("U", "T")
     if not seq:
         raise ValueError("Sequence must not be empty")
@@ -40,6 +42,8 @@ def normalize(seq: str) -> str:
     return seq
 
 def reverse_complement(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Sequence must be a string")
     seq = seq.upper().replace("U", "T")
     invalid = set(seq) - _VALID_TARGET_BASES
     if invalid:
@@ -61,8 +65,20 @@ class Guide:
     pam: str
     pam_interval: Interval
     pam_strand: Strand
+    context: SequenceContext | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.nuclease, Nuclease):
+            raise TypeError("Guide.nuclease must be a Nuclease")
+        if not isinstance(self.pam_interval, Interval):
+            raise TypeError("Guide.pam_interval must be an Interval")
+        if self.context is not None and not isinstance(
+            self.context,
+            SequenceContext,
+        ):
+            raise TypeError(
+                "Guide.context must be a SequenceContext or None"
+            )
         object.__setattr__(self, "sequence", normalize(self.sequence))
         object.__setattr__(self, "pam", normalize(self.pam))
 
@@ -85,6 +101,20 @@ class Guide:
                 f"PAM {self.pam!r} does not match "
                 f"{self.nuclease.name} pattern {self.nuclease.get_pam().pattern!r}"
             )
+        if self.context is not None:
+            site = TargetSite(
+                context=self.context,
+                protospacer_interval=self.protospacer_interval,
+                pam_interval=self.pam_interval,
+                pam_strand=self.pam_strand,
+                nuclease=self.nuclease,
+            )
+            if site.protospacer_sequence != self.sequence:
+                raise ValueError(
+                    "Guide sequence does not match its SequenceContext"
+                )
+            if site.pam_sequence != self.pam:
+                raise ValueError("Guide PAM does not match its SequenceContext")
 
     @property
     def target_strand(self) -> Strand:
@@ -113,15 +143,47 @@ class Guide:
             self.pam_interval.end + spacer_len,
         )
 
-    def cut_site(self) -> int | tuple[int, int]:
-        """Return forward-reference cut boundary or boundaries."""
-        return cut_position(
-            self.pam_interval.start,
-            self.nuclease,
-            self.pam_strand,
+    @property
+    def target_site(self) -> TargetSite:
+        """Return this guide bound to its validated sequence context."""
+        context = self.context
+        if context is None:
+            orientation = pam_orientation(self.nuclease)
+            oriented_site = (
+                self.sequence + self.pam
+                if orientation == "3'"
+                else self.pam + self.sequence
+            )
+            forward_site = (
+                oriented_site
+                if self.pam_strand == "+"
+                else reverse_complement(oriented_site)
+            )
+            site_interval = Interval(
+                min(self.protospacer_interval.start, self.pam_interval.start),
+                max(self.protospacer_interval.end, self.pam_interval.end),
+            )
+            context = SequenceContext(forward_site, site_interval)
+
+        return TargetSite(
+            context=context,
+            protospacer_interval=self.protospacer_interval,
+            pam_interval=self.pam_interval,
+            pam_strand=self.pam_strand,
+            nuclease=self.nuclease,
         )
 
+    def cut_site(self) -> CutSite:
+        """Return the configured strand-aware cut site."""
+        return self.target_site.cut_site()
+
+    def cut_position(self) -> int | tuple[int, int]:
+        """Return the cut site in the legacy integer-or-tuple form."""
+        return self.cut_site().as_position()
+
 def normalize_target(seq: str) -> str:
+    if not isinstance(seq, str):
+        raise TypeError("Target sequence must be a string")
     seq = seq.upper().replace("U", "T")
     if not seq:
         raise ValueError("Target sequence must not be empty")
@@ -131,7 +193,7 @@ def normalize_target(seq: str) -> str:
     return seq
 
 def find_guides(
-    target: str,
+    target: str | SequenceContext,
     nuclease: Nuclease,
     pam_strand: Literal["+", "-", "both"] = "both",
 ) -> list[Guide]:
@@ -145,8 +207,19 @@ def find_guides(
             "pam_strand must be '+', '-', or 'both', "
             f"got {pam_strand!r}"
         )
+    if not isinstance(nuclease, Nuclease):
+        raise TypeError("nuclease must be a Nuclease instance")
 
-    target_norm = normalize_target(target)
+    if isinstance(target, SequenceContext):
+        context = target
+        target_norm = context.sequence
+    else:
+        target_norm = normalize_target(target)
+        context = SequenceContext(
+            target_norm,
+            Interval(0, len(target_norm)),
+        )
+    coordinate_offset = context.interval.start
     pam_obj = nuclease.get_pam()
     orientation = pam_orientation(nuclease)
     pam_len = len(pam_obj)
@@ -174,8 +247,12 @@ def find_guides(
                     sequence=protospacer,
                     nuclease=nuclease,
                     pam=target_norm[p : p + pam_len],
-                    pam_interval=Interval(p, p + pam_len),
+                    pam_interval=Interval(
+                        coordinate_offset + p,
+                        coordinate_offset + p + pam_len,
+                    ),
                     pam_strand="+",
+                    context=context,
                 )
             )
 
@@ -204,10 +281,11 @@ def find_guides(
                     nuclease=nuclease,
                     pam=rev_target[j : j + pam_len],
                     pam_interval=Interval(
-                        pam_start_fwd,
-                        pam_start_fwd + pam_len,
+                        coordinate_offset + pam_start_fwd,
+                        coordinate_offset + pam_start_fwd + pam_len,
                     ),
                     pam_strand="-",
+                    context=context,
                 )
             )
 

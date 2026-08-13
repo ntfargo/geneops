@@ -15,7 +15,6 @@
 import pytest
 
 from geneops.coordinates import Interval, opposite_strand
-
 class TestInterval:
     def test_zero_based_half_open_length(self):
         interval = Interval(10, 20)
@@ -40,7 +39,10 @@ class TestInterval:
         with pytest.raises(TypeError):
             Interval(1.5, 2)  # type: ignore[arg-type]
 
-
+    @pytest.mark.parametrize("start,end", [(True, 2), (1, False)])
+    def test_boolean_bounds_raise(self, start, end):
+        with pytest.raises(TypeError, match="integers"):
+            Interval(start, end)
 class TestOppositeStrand:
     def test_opposites(self):
         assert opposite_strand("+") == "-"

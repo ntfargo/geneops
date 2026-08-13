@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Literal
 
+from .coordinates import CutSite, Strand
+
 # IUPAC nucleotide codes mapping
 IUPAC: Dict[str, set[str]] = {
     "A": {"A"},
@@ -70,11 +72,20 @@ class PAM:
         """Return the length of the PAM pattern."""
         return len(self.pattern)
     
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Support comparison with strings (pattern only) or other PAM objects."""
         if isinstance(other, str):
             return self.pattern == other
-        return super().__eq__(other)
+        if isinstance(other, PAM):
+            return (
+                self.pattern == other.pattern
+                and self.orientation == other.orientation
+            )
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        """Hash compatibly with both PAM and pattern-string equality."""
+        return hash(self.pattern)
     
     def matches(self, seq: str) -> bool:
         """Check if a sequence matches this PAM pattern."""
@@ -102,13 +113,14 @@ class PAM:
 
 @dataclass(frozen=True, slots=True)
 class CleavagePattern:
-    """Strand-specific cut offsets along the PAM-strand protospacer.
+    """Configured strand-specific cut offsets along the protospacer.
 
     Both offsets are measured from the protospacer's 5' end in PAM-strand
     orientation.  An offset is a boundary between bases: ``0`` is immediately
     before the protospacer and ``spacer_length`` immediately after it.
     ``None`` means that strand is not cut, allowing nickases to be represented
-    without a separate behavior flag.
+    without a separate behavior flag. Offsets are nominal geometry: actual
+    cleavage can vary across molecules, target sequences, and conditions.
     """
 
     pam_strand_offset: int | None
@@ -386,17 +398,12 @@ def overhang_length(nuclease: Nuclease | str) -> int:
         raise ValueError(f"{nuclease.name} is a nickase and has no overhang")
     return length
 
-def cut_position(
+def _cut_boundaries(
     pam_index: int,
     nuclease: Nuclease | str,
-    pam_strand: Literal["+", "-"] = "+",
-) -> int | tuple[int, int]:
-    """Return cut boundaries in zero-based forward-reference coordinates.
-
-    ``pam_index`` is the start of the PAM's half-open interval on the forward
-    reference, and ``pam_strand`` is the strand containing the recognized PAM.
-    A blunt cut returns one boundary; a staggered cut returns two boundaries.
-    """
+    pam_strand: Strand,
+) -> tuple[int | None, int | None, Strand]:
+    """Map strand-relative cleavage offsets onto a forward reference."""
     nuclease = _resolve_nuclease(nuclease)
     if pam_strand not in {"+", "-"}:
         raise ValueError(
@@ -426,13 +433,51 @@ def cut_position(
         def position(offset: int) -> int:
             return protospacer_start - offset
 
+    pam_boundary = nuclease.cleavage.pam_strand_offset
+    target_boundary = nuclease.cleavage.target_strand_offset
+    return (
+        position(pam_boundary) if pam_boundary is not None else None,
+        position(target_boundary) if target_boundary is not None else None,
+        pam_strand,
+    )
+
+
+def calculate_cut_site(
+    pam_index: int,
+    nuclease: Nuclease | str,
+    pam_strand: Strand = "+",
+) -> CutSite:
+    """Return the configured strand-aware cut site on the forward reference.
+
+    ``pam_index`` is the start of the PAM's half-open interval. Unlike
+    :func:`cut_position`, the result retains the identity of the PAM and
+    target strand boundaries, including which reference strand a nickase
+    cuts.
+    """
+    return CutSite(*_cut_boundaries(pam_index, nuclease, pam_strand))
+
+
+def cut_position(
+    pam_index: int,
+    nuclease: Nuclease | str,
+    pam_strand: Strand = "+",
+) -> int | tuple[int, int]:
+    """Return cut boundaries in the legacy integer-or-tuple form.
+
+    ``pam_index`` is the start of the PAM's half-open interval on the forward
+    reference, and ``pam_strand`` is the strand containing the recognized PAM.
+    New code should prefer :func:`calculate_cut_site`, which preserves strand
+    identity.
+    """
+    pam_boundary, target_boundary, _ = _cut_boundaries(
+        pam_index,
+        nuclease,
+        pam_strand,
+    )
     positions = [
-        position(offset)
-        for offset in (
-            nuclease.cleavage.pam_strand_offset,
-            nuclease.cleavage.target_strand_offset,
-        )
-        if offset is not None
+        boundary
+        for boundary in (pam_boundary, target_boundary)
+        if boundary is not None
     ]
     if len(positions) == 1 or positions[0] == positions[1]:
         return positions[0]

@@ -31,6 +31,7 @@ nav:
   - Concepts:
       - Overview: concepts/index.md
       - Coordinates and strands: concepts/coordinates.md
+      - Sequence context and target sites: concepts/targets.md
       - Nucleases and PAMs: concepts/nucleases.md
   - Guides:
       - Overview: guides/index.md
@@ -39,6 +40,7 @@ nav:
   - API reference:
       - Overview: reference/index.md
       - Coordinates: reference/coordinates.md
+      - Targets: reference/target.md
       - Guides: reference/guide.md
       - Nucleases: reference/nuclease.md
   - Linear Fox: http://linearfox.com/

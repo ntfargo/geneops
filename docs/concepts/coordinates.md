@@ -40,18 +40,28 @@ For a [`Guide`][geneops.guide.Guide]:
 !!! important
     `pam_strand` and `target_strand` are opposites. Avoid using an unqualified field named only `strand` in downstream data structures.
 
-## Cut sites are boundaries
+## Cut sites are strand-aware boundaries
 
-Cut positions are zero-based boundaries between bases, not base indices. A blunt cut returns one integer. A staggered cut returns the two strand boundaries as a tuple.
+Cut positions are zero-based boundaries between bases, not base indices. A [`CutSite`][geneops.coordinates.CutSite] keeps the PAM-strand and target-strand boundaries separate, which matters for staggered cuts and nickases.
 
 ```python
-from geneops import cut_position
+from geneops import calculate_cut_site
 
-cut_position(20, "SpCas9", "+")    # 17
-cut_position(10, "AsCas12a", "+") # (32, 37)
+site = calculate_cut_site(10, "AsCas12a", "+")
+
+site.pam_strand_boundary     # 32
+site.target_strand_boundary  # 37
+site.plus_strand_boundary    # 32
+site.minus_strand_boundary   # 37
+site.overhang                # "5'"
 ```
 
-The first argument is the start of the PAM's half-open interval on the forward reference. Use `guide.cut_site()` when you already have a guide it supplies this geometry for you.
+The first argument is the start of the PAM's half-open interval on the forward reference. Use `guide.cut_site()` when you already have a guide. Existing coordinate-only code can continue to use `cut_position()`, which returns an integer for one unique boundary or a sorted tuple for two.
+
+!!! note "Changed in 0.0.6"
+    `Guide.cut_site()` now returns a strand-aware `CutSite` instead of an integer or tuple. Replace numeric uses with `guide.cut_position()`, or use properties such as `guide.cut_site().pam_strand_boundary` when strand identity matters.
+
+Cut coordinates are the nominal boundaries configured by the selected nuclease. Real cleavage can be heterogeneous across molecules, target sequences, and experimental conditions.
 
 ## Converting one-based coordinates
 

@@ -14,7 +14,7 @@
 
 import pytest
 
-from geneops.coordinates import Interval
+from geneops.coordinates import CutSite, Interval
 from geneops.guide import (
     Guide,
     find_guides,
@@ -26,16 +26,13 @@ from geneops.guide import (
 )
 from geneops.nuclease import Nuclease, get_nuclease
 
-
 @pytest.fixture
 def spcas9() -> Nuclease:
     return get_nuclease("SpCas9")
 
-
 @pytest.fixture
 def ascas12a() -> Nuclease:
     return get_nuclease("AsCas12a")
-
 
 def make_guide(
     nuclease: Nuclease,
@@ -58,8 +55,6 @@ def make_guide(
         pam_interval=pam_interval,
         pam_strand=pam_strand,  # type: ignore[arg-type]
     )
-
-
 class TestNormalize:
     def test_uppercase(self):
         assert normalize("acgt") == "ACGT"
@@ -82,8 +77,6 @@ class TestNormalize:
     def test_invalid_target_base_raises(self):
         with pytest.raises(ValueError, match="target sequence"):
             normalize_target("ACGTX")
-
-
 class TestReverseComplement:
     def test_basic(self):
         assert reverse_complement("AACG") == "CGTT"
@@ -98,8 +91,6 @@ class TestReverseComplement:
     def test_invalid_base_raises(self):
         with pytest.raises(ValueError, match="Invalid bases"):
             reverse_complement("ACGX")
-
-
 class TestGuideConstruction:
     def test_sequence_and_pam_are_normalized(self, spcas9):
         guide = make_guide(
@@ -113,6 +104,33 @@ class TestGuideConstruction:
     def test_invalid_sequence_raises(self, spcas9):
         with pytest.raises(ValueError, match="Invalid bases"):
             make_guide(spcas9, sequence="X" * 20)
+
+    def test_wrong_component_types_raise_clear_errors(self, spcas9):
+        with pytest.raises(TypeError, match="Guide.nuclease"):
+            Guide(
+                sequence="A" * 20,
+                nuclease="SpCas9",  # type: ignore[arg-type]
+                pam="AGG",
+                pam_interval=Interval(20, 23),
+                pam_strand="+",
+            )
+        with pytest.raises(TypeError, match="Guide.pam_interval"):
+            Guide(
+                sequence="A" * 20,
+                nuclease=spcas9,
+                pam="AGG",
+                pam_interval=(20, 23),  # type: ignore[arg-type]
+                pam_strand="+",
+            )
+        with pytest.raises(TypeError, match="Guide.context"):
+            Guide(
+                sequence="A" * 20,
+                nuclease=spcas9,
+                pam="AGG",
+                pam_interval=Interval(20, 23),
+                pam_strand="+",
+                context="GRCh38",  # type: ignore[arg-type]
+            )
 
     def test_wrong_spacer_length_raises(self, spcas9):
         with pytest.raises(ValueError, match="does not match"):
@@ -153,8 +171,6 @@ class TestGuideConstruction:
         guide = make_guide(spcas9)
         assert not hasattr(guide, "strand")
         assert not hasattr(guide, "pam_position")
-
-
 class TestProtospacerInterval:
     @pytest.mark.parametrize(
         ("nuclease_name", "pam_interval", "pam_strand", "expected"),
@@ -180,8 +196,6 @@ class TestProtospacerInterval:
         )
         assert guide.protospacer_interval == expected
         assert len(guide.protospacer_interval) == nuclease.spacer_length
-
-
 class TestCutSite:
     @pytest.mark.parametrize(
         ("nuclease_name", "pam_interval", "pam_strand", "expected"),
@@ -204,9 +218,10 @@ class TestCutSite:
             pam_interval=pam_interval,
             pam_strand=pam_strand,
         )
-        assert guide.cut_site() == expected
-
-
+        site = guide.cut_site()
+        assert isinstance(site, CutSite)
+        assert site.as_position() == expected
+        assert guide.cut_position() == expected
 class TestFindGuides:
     spacer = "ATGCACGTTAGCTACGATCA"
 
@@ -343,8 +358,6 @@ class TestValidateGuideSequence:
 
     def test_rna_input_is_accepted(self):
         validate_guide_sequence("AUGCAUGCAUGCAUGCAUGC")
-
-
 class TestGuideGCContent:
     @pytest.mark.parametrize(
         ("sequence", "expected"),
