@@ -2,11 +2,42 @@
 
 A guide sequence alone does not identify a genome-editing target. The same sequence can occur on different contigs, assemblies, or strands, and many scoring and outcome models also require bases flanking the protospacer and PAM.
 
-GeneOps separates three related objects:
+GeneOps separates the related biological objects instead of treating every
+sequence as a generic string:
 
+- [`Spacer`][geneops.target.Spacer] is the location-free targeting portion of
+  a guide RNA construct.
+- [`Protospacer`][geneops.target.Protospacer] is the reference-located DNA
+  sequence targeted by a spacer.
+- [`PAMSite`][geneops.target.PAMSite] is an observed, located sequence that
+  matches a nuclease's PAM definition.
 - [`SequenceContext`][geneops.target.SequenceContext] is a forward-reference sequence slice with an interval and optional reference and contig identifiers.
 - [`TargetSite`][geneops.target.TargetSite] binds validated protospacer and PAM intervals to that context and a nuclease.
-- [`Guide`][geneops.guide.Guide] is the construct-ready guide sequence for a target site.
+- [`Guide`][geneops.guide.Guide] is a guide candidate connecting a spacer to a
+  target site. It does not represent the full scaffold-containing guide RNA.
+
+## Spacer is not protospacer
+
+The terms are intentionally distinct. A spacer belongs to the guide construct
+and has no genomic coordinate. A protospacer belongs to a reference sequence
+the same spacer can match multiple genomic protospacers.
+
+```python
+guide.spacer.sequence        # DNA spelling used for comparison
+guide.spacer.rna_sequence    # RNA spelling used in the guide
+guide.protospacer.sequence   # DNA sequence at this target
+guide.protospacer.interval   # forward-reference location
+guide.pam_site.sequence      # observed PAM, such as TGG
+guide.pam_site.pam.pattern   # accepted pattern, such as NGG
+```
+
+For the DNA-targeting nucleases currently supported, spacer and protospacer
+have the same nucleotide spelling. They remain separate objects because one is
+a reagent component and the other is a reference-located biological feature.
+This follows the terminology used by the
+[crisprVerse domain model](https://github.com/crisprVerse/crisprBase) and keeps
+location separate from literal sequence as recommended by
+[GA4GH VRS](https://vrs.ga4gh.org/en/latest/concepts/LocationAndReference/SequenceLocation.html).
 
 ## Preserve reference coordinates
 
@@ -32,6 +63,7 @@ guide = find_guides(
 guide.pam_interval          # Interval(start=1030, end=1033)
 guide.protospacer_interval  # Interval(start=1010, end=1030)
 guide.context.reference     # "GRCh38"
+guide.spacer.rna_sequence   # "AUGCACGUUAGCUACGAUCA"
 ```
 
 Passing a plain string remains supported. GeneOps then creates an anonymous `SequenceContext` spanning `[0, len(sequence))`.

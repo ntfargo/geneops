@@ -1,6 +1,6 @@
 # Discover guides
 
-[`find_guides`][geneops.guide.find_guides] searches a target sequence for recognized PAMs and returns valid, construct-ready [`Guide`][geneops.guide.Guide] objects.
+[`find_guides`][geneops.guide.find_guides] searches a target sequence for recognized PAMs and returns validated [`Guide`][geneops.guide.Guide] candidates. A candidate contains the targeting spacer and its reference-located protospacer and PAM it does not include a complete guide RNA scaffold.
 
 ## Cas9: a 3′ PAM
 
@@ -23,7 +23,9 @@ guide = find_guides(
 )[0]
 
 assert guide.sequence == spacer
+assert guide.spacer.rna_sequence == spacer.replace("T", "U")
 assert guide.pam == "TGG"
+assert guide.pam_site.sequence == "TGG"
 assert tuple(guide.pam_interval) == (30, 33)
 assert tuple(guide.protospacer_interval) == (10, 30)
 assert guide.target_strand == "-"
@@ -57,7 +59,7 @@ assert guide.cut_site().overhang == "5'"
 
 ## Handle ambiguous target bases
 
-Target sequences may contain `N`, which is useful for masked or uncertain bases. A candidate is not returned when its protospacer contains an `N`, because `Guide.sequence` is construct-ready and accepts only `A`, `C`, `G`, and `T`.
+Target sequences may contain `N`, which is useful for masked or uncertain bases. A candidate is not returned when its protospacer contains an `N`, because a concrete `Spacer` and `Protospacer` accept only `A`, `C`, `G`, and `T`.
 
 ```python
 from geneops.guide import normalize_target

@@ -58,9 +58,6 @@ site.overhang                # "5'"
 
 The first argument is the start of the PAM's half-open interval on the forward reference. Use `guide.cut_site()` when you already have a guide. Existing coordinate-only code can continue to use `cut_position()`, which returns an integer for one unique boundary or a sorted tuple for two.
 
-!!! note "Changed in 0.0.6"
-    `Guide.cut_site()` now returns a strand-aware `CutSite` instead of an integer or tuple. Replace numeric uses with `guide.cut_position()`, or use properties such as `guide.cut_site().pam_strand_boundary` when strand identity matters.
-
 Cut coordinates are the nominal boundaries configured by the selected nuclease. Real cleavage can be heterogeneous across molecules, target sequences, and experimental conditions.
 
 ## Converting one-based coordinates

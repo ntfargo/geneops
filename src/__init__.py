@@ -36,7 +36,7 @@ from .nuclease import (
     validate_nuclease,
 )
 
-from .target import SequenceContext, TargetSite
+from .target import PAMSite, Protospacer, SequenceContext, Spacer, TargetSite
 
 from .guide import (
     Guide,
@@ -55,6 +55,9 @@ __all__ = [
     "Strand",
     "opposite_strand",
     # target
+    "Spacer",
+    "Protospacer",
+    "PAMSite",
     "SequenceContext",
     "TargetSite",
     # nuclease

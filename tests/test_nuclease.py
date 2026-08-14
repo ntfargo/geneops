@@ -360,7 +360,7 @@ def test_is_guide_length_valid_empty_guide():
 
 def test_is_guide_compatible_cas9_valid():
     """Test guide compatibility for Cas9 with valid guide and target."""
-    # Geneops reports the construct-ready guide in PAM-strand orientation.
+    # Geneops reports the spacer sequence in PAM-strand orientation.
     guide = "CGATCGATCGATCGATCGAT"
     target = "CGATCGATCGATCGATCGATAGG"
     

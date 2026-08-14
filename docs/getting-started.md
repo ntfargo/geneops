@@ -25,15 +25,15 @@ nuclease = get_nuclease("SpCas9")
 
 for guide in find_guides(target, nuclease):
     print(
-        guide.sequence,
-        guide.pam,
+        guide.spacer.rna_sequence,
+        guide.pam_site.sequence,
         guide.pam_strand,
-        guide.protospacer_interval,
+        guide.protospacer.interval,
         guide.cut_site().boundaries,
     )
 ```
 
-`find_guides` returns [`Guide`][geneops.guide.Guide] objects rather than bare strings. Each result carries the nuclease, observed PAM, strand, reference interval, and configured nominal cut geometry needed by later workflow stages.
+`find_guides` returns [`Guide`][geneops.guide.Guide] candidates rather than bare strings. Each result distinguishes the guide [`Spacer`][geneops.target.Spacer], located [`Protospacer`][geneops.target.Protospacer], observed [`PAMSite`][geneops.target.PAMSite], nuclease, and configured nominal cut geometry needed by later workflow stages.
 
 ## Filter by PAM strand
 

@@ -7,7 +7,11 @@ import pytest
 
 from geneops import (
     Interval,
+    PAM,
+    PAMSite,
+    Protospacer,
     SequenceContext,
+    Spacer,
     TargetSite,
     find_guides,
     get_nuclease,
@@ -15,6 +19,27 @@ from geneops import (
 )
 
 SPACER = "ATGCACGTTAGCTACGATCA"
+
+
+class TestSpacer:
+    def test_is_a_location_free_normalized_guide_sequence(self):
+        spacer = Spacer("augc")
+
+        assert spacer.sequence == "ATGC"
+        assert spacer.dna_sequence == "ATGC"
+        assert spacer.rna_sequence == "AUGC"
+        assert spacer.gc_content == pytest.approx(0.5)
+        assert len(spacer) == 4
+
+    @pytest.mark.parametrize("sequence", ["", "ACGN", "ACG-"])
+    def test_rejects_non_constructible_sequences(self, sequence):
+        with pytest.raises(ValueError):
+            Spacer(sequence)
+
+    def test_rejects_non_string_sequence(self):
+        with pytest.raises(TypeError, match="Spacer sequence"):
+            Spacer(123)  # type: ignore[arg-type]
+
 
 class TestSequenceContext:
     def test_normalizes_and_extracts_global_interval(self):
@@ -58,6 +83,72 @@ class TestSequenceContext:
             downstream=1,
             strand="-",
         ) == "AACCGGT"
+
+
+class TestProtospacer:
+    def test_extracts_sequence_in_pam_strand_orientation(self):
+        context = SequenceContext(
+            "AAGCTTCA",
+            Interval(100, 108),
+            reference="GRCh38",
+            contig="chr7",
+        )
+
+        plus = Protospacer(context, Interval(101, 106), "+")
+        minus = Protospacer(context, Interval(101, 106), "-")
+
+        assert plus.sequence == "AGCTT"
+        assert minus.sequence == "AAGCT"
+        assert plus.target_strand == "-"
+        assert minus.target_strand == "+"
+        assert plus.context.reference == "GRCh38"
+        assert len(plus) == 5
+
+    def test_rejects_unknown_bases(self):
+        context = SequenceContext("ACNT", Interval(0, 4))
+        with pytest.raises(ValueError, match="unknown bases"):
+            Protospacer(context, Interval(0, 4), "+")
+
+    def test_rejects_empty_interval(self):
+        context = SequenceContext("ACGT", Interval(0, 4))
+        with pytest.raises(ValueError, match="must not be empty"):
+            Protospacer(context, Interval(2, 2), "+")
+
+
+class TestPAMSite:
+    def test_validates_observed_sequence_against_pam(self):
+        context = SequenceContext("CCAAGGAA", Interval(100, 108))
+        site = PAMSite(
+            context,
+            Interval(103, 106),
+            "+",
+            PAM("NGG", "3'"),
+        )
+
+        assert site.sequence == "AGG"
+        assert site.pam.pattern == "NGG"
+
+    def test_reads_reverse_strand_pam_in_its_own_orientation(self):
+        context = SequenceContext("AACCAAAA", Interval(100, 108))
+        site = PAMSite(
+            context,
+            Interval(102, 105),
+            "-",
+            PAM("NGG", "3'"),
+        )
+
+        assert site.sequence == "TGG"
+
+    def test_rejects_non_matching_observed_sequence(self):
+        context = SequenceContext("CCAAAACC", Interval(100, 108))
+        with pytest.raises(ValueError, match="does not match PAM"):
+            PAMSite(
+                context,
+                Interval(102, 105),
+                "+",
+                PAM("NGG", "3'"),
+            )
+
 
 class TestTargetSite:
     @pytest.fixture
@@ -119,6 +210,10 @@ class TestTargetSite:
         assert guide.context is context
         assert guide.protospacer_interval == Interval(110, 130)
         assert isinstance(guide.target_site, TargetSite)
+        assert isinstance(guide.target_site.spacer, Spacer)
+        assert isinstance(guide.target_site.protospacer, Protospacer)
+        assert isinstance(guide.target_site.pam_site, PAMSite)
+        assert guide.target_site.spacer.sequence == SPACER
         assert guide.target_site.protospacer_sequence == SPACER
         assert guide.target_site.pam_sequence == "TGG"
         assert guide.target_site.sequence_context(

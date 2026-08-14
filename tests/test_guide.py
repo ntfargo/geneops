@@ -14,6 +14,7 @@
 
 import pytest
 
+from geneops import PAMSite, Protospacer, Spacer
 from geneops.coordinates import CutSite, Interval
 from geneops.guide import (
     Guide,
@@ -171,6 +172,15 @@ class TestGuideConstruction:
         guide = make_guide(spcas9)
         assert not hasattr(guide, "strand")
         assert not hasattr(guide, "pam_position")
+
+    def test_exposes_precise_spacer_and_target_features(self, spcas9):
+        guide = make_guide(spcas9, sequence="ATGC" * 5)
+
+        assert guide.spacer == Spacer("ATGC" * 5)
+        assert isinstance(guide.protospacer, Protospacer)
+        assert isinstance(guide.pam_site, PAMSite)
+        assert guide.protospacer.sequence == guide.spacer.sequence
+        assert guide.pam_site.sequence == guide.pam
 class TestProtospacerInterval:
     @pytest.mark.parametrize(
         ("nuclease_name", "pam_interval", "pam_strand", "expected"),
@@ -234,7 +244,7 @@ class TestFindGuides:
         oriented_site = cls.spacer + "TGG"
         return "A" * 10 + reverse_complement(oriented_site) + "A" * 10
 
-    def test_plus_pam_returns_construct_ready_sequence(self, spcas9):
+    def test_plus_pam_returns_spacer_sequence(self, spcas9):
         guides = find_guides(
             self.plus_cas9_target(),
             spcas9,

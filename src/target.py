@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .coordinates import CutSite, Interval, Strand, opposite_strand
-from .nuclease import Nuclease, calculate_cut_site, pam_orientation
+from .nuclease import PAM, Nuclease, calculate_cut_site, pam_orientation
 
 _VALID_CONTEXT_BASES = frozenset("ACGTN")
 _VALID_PROTOSPACER_BASES = frozenset("ACGT")
@@ -42,6 +42,47 @@ def _normalize_context_sequence(sequence: str) -> str:
 
 def _reverse_complement(sequence: str) -> str:
     return "".join(_COMPLEMENT[base] for base in reversed(sequence))
+
+
+@dataclass(frozen=True, slots=True)
+class Spacer:
+    """The variable targeting sequence used in a guide RNA construct.
+
+    The stored value uses the DNA alphabet so it can be compared directly with
+    DNA protospacers. ``rna_sequence`` provides the equivalent RNA spelling.
+    A spacer has no genomic location and may target more than one protospacer.
+    """
+
+    sequence: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.sequence, str):
+            raise TypeError("Spacer sequence must be a string")
+        normalized = self.sequence.upper().replace("U", "T")
+        if not normalized:
+            raise ValueError("Spacer sequence must not be empty")
+        invalid = set(normalized) - _VALID_PROTOSPACER_BASES
+        if invalid:
+            raise ValueError(f"Invalid bases in spacer: {sorted(invalid)}")
+        object.__setattr__(self, "sequence", normalized)
+
+    def __len__(self) -> int:
+        return len(self.sequence)
+
+    @property
+    def dna_sequence(self) -> str:
+        """Return the normalized DNA spelling of the spacer."""
+        return self.sequence
+
+    @property
+    def rna_sequence(self) -> str:
+        """Return the spacer 5′ to 3′ using the RNA alphabet."""
+        return self.sequence.replace("T", "U")
+
+    @property
+    def gc_content(self) -> float:
+        """Return the fraction of spacer bases that are G or C."""
+        return sum(base in "GC" for base in self.sequence) / len(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +172,85 @@ class SequenceContext:
 
 
 @dataclass(frozen=True, slots=True)
+class Protospacer:
+    """A reference-located DNA sequence targeted by a spacer.
+
+    ``pam_strand`` identifies the strand whose 5′ to 3′ sequence matches the
+    DNA spelling of the guide spacer. Coordinates always remain on the forward
+    reference.
+    """
+
+    context: SequenceContext
+    interval: Interval
+    pam_strand: Strand
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, SequenceContext):
+            raise TypeError("Protospacer.context must be a SequenceContext")
+        if not isinstance(self.interval, Interval):
+            raise TypeError("Protospacer.interval must be an Interval")
+        if self.pam_strand not in ("+", "-"):
+            raise ValueError(
+                f"pam_strand must be '+' or '-', got {self.pam_strand!r}"
+            )
+        if not self.context.contains(self.interval):
+            raise ValueError("Protospacer interval is outside SequenceContext")
+        if not self.interval:
+            raise ValueError("Protospacer interval must not be empty")
+        if set(self.sequence) - _VALID_PROTOSPACER_BASES:
+            raise ValueError("Protospacer contains unknown bases")
+
+    def __len__(self) -> int:
+        return len(self.interval)
+
+    @property
+    def sequence(self) -> str:
+        """Return the protospacer 5′ to 3′ on the PAM strand."""
+        return self.context.extract(self.interval, self.pam_strand)
+
+    @property
+    def target_strand(self) -> Strand:
+        """Return the strand complementary to the guide spacer."""
+        return opposite_strand(self.pam_strand)
+
+
+@dataclass(frozen=True, slots=True)
+class PAMSite:
+    """An observed, reference-located sequence matching a PAM definition."""
+
+    context: SequenceContext
+    interval: Interval
+    pam_strand: Strand
+    pam: PAM
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.context, SequenceContext):
+            raise TypeError("PAMSite.context must be a SequenceContext")
+        if not isinstance(self.interval, Interval):
+            raise TypeError("PAMSite.interval must be an Interval")
+        if not isinstance(self.pam, PAM):
+            raise TypeError("PAMSite.pam must be a PAM")
+        if self.pam_strand not in ("+", "-"):
+            raise ValueError(
+                f"pam_strand must be '+' or '-', got {self.pam_strand!r}"
+            )
+        if not self.context.contains(self.interval):
+            raise ValueError("PAM interval is outside SequenceContext")
+        if len(self.interval) != len(self.pam):
+            raise ValueError("PAM interval length does not match PAM pattern")
+        if not self.pam.matches(self.sequence):
+            raise ValueError(
+                f"Observed sequence {self.sequence!r} does not match "
+                f"PAM pattern {self.pam.pattern!r}"
+            )
+
+    @property
+    def sequence(self) -> str:
+        """Return the observed PAM 5′ to 3′ on the PAM strand."""
+        return self.context.extract(self.interval, self.pam_strand)
+
+
+@dataclass(frozen=True, slots=True)
 class TargetSite:
     """A validated protospacer/PAM site bound to sequence context.
 
@@ -160,17 +280,13 @@ class TargetSite:
             raise ValueError(
                 f"pam_strand must be '+' or '-', got {self.pam_strand!r}"
             )
-        if len(self.protospacer_interval) != self.nuclease.spacer_length:
+        protospacer = self.protospacer
+        pam_site = self.pam_site
+        if len(protospacer) != self.nuclease.spacer_length:
             raise ValueError(
                 "Protospacer interval length does not match nuclease spacer "
                 "length"
             )
-        if len(self.pam_interval) != self.nuclease.pam_length():
-            raise ValueError("PAM interval length does not match nuclease PAM")
-        if not self.context.contains(self.protospacer_interval):
-            raise ValueError("Protospacer interval is outside SequenceContext")
-        if not self.context.contains(self.pam_interval):
-            raise ValueError("PAM interval is outside SequenceContext")
 
         spacer_upstream = (
             (self.pam_strand == "+" and pam_orientation(self.nuclease) == "3'")
@@ -180,20 +296,12 @@ class TargetSite:
             )
         )
         if spacer_upstream:
-            adjacent = self.protospacer_interval.end == self.pam_interval.start
+            adjacent = protospacer.interval.end == pam_site.interval.start
         else:
-            adjacent = self.pam_interval.end == self.protospacer_interval.start
+            adjacent = pam_site.interval.end == protospacer.interval.start
         if not adjacent:
             raise ValueError(
                 "Protospacer and PAM intervals do not match nuclease geometry"
-            )
-
-        if set(self.protospacer_sequence) - _VALID_PROTOSPACER_BASES:
-            raise ValueError("TargetSite protospacer contains unknown bases")
-        if not self.nuclease.matches_pam(self.pam_sequence):
-            raise ValueError(
-                f"Observed PAM {self.pam_sequence!r} does not match "
-                f"{self.nuclease.name}"
             )
 
     @property
@@ -210,17 +318,38 @@ class TargetSite:
         )
 
     @property
+    def spacer(self) -> Spacer:
+        """Return the guide spacer that targets this protospacer."""
+        return Spacer(self.protospacer.sequence)
+
+    @property
+    def protospacer(self) -> Protospacer:
+        """Return the reference-located protospacer object."""
+        return Protospacer(
+            context=self.context,
+            interval=self.protospacer_interval,
+            pam_strand=self.pam_strand,
+        )
+
+    @property
+    def pam_site(self) -> PAMSite:
+        """Return the observed, reference-located PAM match."""
+        return PAMSite(
+            context=self.context,
+            interval=self.pam_interval,
+            pam_strand=self.pam_strand,
+            pam=self.nuclease.get_pam(),
+        )
+
+    @property
     def protospacer_sequence(self) -> str:
         """Return the protospacer 5′ to 3′ on the PAM strand."""
-        return self.context.extract(
-            self.protospacer_interval,
-            self.pam_strand,
-        )
+        return self.protospacer.sequence
 
     @property
     def pam_sequence(self) -> str:
         """Return the observed PAM 5′ to 3′ on the PAM strand."""
-        return self.context.extract(self.pam_interval, self.pam_strand)
+        return self.pam_site.sequence
 
     def sequence_context(
         self,

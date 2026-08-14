@@ -23,7 +23,7 @@ from .nuclease import (
     Nuclease,
     pam_orientation,
 )
-from .target import SequenceContext, TargetSite
+from .target import PAMSite, Protospacer, SequenceContext, Spacer, TargetSite
 
 _VALID_DNA_BASES = frozenset("ACGT")
 _VALID_TARGET_BASES = frozenset("ACGTN")
@@ -53,11 +53,12 @@ def reverse_complement(seq: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Guide:
-    """A construct-ready guide located on a forward reference sequence.
+    """A guide candidate associated with a genomic target site.
 
-    ``sequence`` is stored 5' to 3' in the PAM-strand orientation using the
-    DNA alphabet.  It is therefore identical to the protospacer on the strand
-    containing the PAM.  All intervals use forward-reference coordinates.
+    ``sequence`` is the DNA spelling of the guide RNA spacer, stored 5′ to 3′.
+    It is identical to the DNA protospacer sequence for the DNA-targeting
+    nucleases currently supported. It does not include a guide RNA scaffold.
+    All intervals use forward-reference coordinates.
     """
 
     sequence: str
@@ -122,6 +123,11 @@ class Guide:
         return opposite_strand(self.pam_strand)
 
     @property
+    def spacer(self) -> Spacer:
+        """Return the targeting portion of the guide RNA construct."""
+        return Spacer(self.sequence)
+
+    @property
     def protospacer_interval(self) -> Interval:
         """Return the protospacer as a forward-reference interval."""
         orientation = pam_orientation(self.nuclease)
@@ -172,6 +178,16 @@ class Guide:
             pam_strand=self.pam_strand,
             nuclease=self.nuclease,
         )
+
+    @property
+    def protospacer(self) -> Protospacer:
+        """Return the reference-located DNA sequence targeted by the spacer."""
+        return self.target_site.protospacer
+
+    @property
+    def pam_site(self) -> PAMSite:
+        """Return the reference-located PAM match for this guide."""
+        return self.target_site.pam_site
 
     def cut_site(self) -> CutSite:
         """Return the configured strand-aware cut site."""
@@ -300,8 +316,6 @@ def validate_guide_sequence(seq: str) -> None:
         )
 
 def guide_gc_content(guide: Guide) -> float:
-    seq = guide.sequence
-    if not seq:
-        return 0.0
-    gc = sum(1 for b in seq if b in "GC")
-    return gc / len(seq)
+    if not isinstance(guide, Guide):
+        raise TypeError("guide must be a Guide instance")
+    return guide.spacer.gc_content
