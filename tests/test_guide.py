@@ -25,7 +25,7 @@ from geneops.guide import (
     reverse_complement,
     validate_guide_sequence,
 )
-from geneops.nuclease import Nuclease, get_nuclease
+from geneops.nuclease import CleavagePattern, Nuclease, PAM, get_nuclease
 
 @pytest.fixture
 def spcas9() -> Nuclease:
@@ -305,6 +305,76 @@ class TestFindGuides:
 
         assert guide.sequence == spacer
         assert guide.protospacer_interval == Interval(14, 37)
+
+    def test_cas12a_reverse_hit_uses_five_prime_pam_geometry(self, ascas12a):
+        spacer = "ACGTACGTACGTACGTACGTACG"
+        target = "C" * 10 + reverse_complement("TTTG" + spacer) + "C" * 10
+
+        guide = next(
+            g
+            for g in find_guides(target, ascas12a, pam_strand="-")
+            if g.pam_interval == Interval(33, 37)
+        )
+
+        assert guide.sequence == spacer
+        assert guide.pam == "TTTG"
+        assert guide.protospacer_interval == Interval(10, 33)
+
+    def test_matches_published_crisprdesign_custom_sequence(self, spcas9):
+        """Reproduce the official crisprDesign custom-sequence example.
+
+        crisprDesign reports one-based PAM-strand sites; GeneOps represents
+        each PAM as a zero-based forward-reference interval, so reverse PAM
+        starts differ while the physical spans and ordering are equivalent.
+        """
+        target = "AGGCGGAGGCCCGACCCGGGCGCGGGGCGGCGC"
+
+        guides = find_guides(target, spcas9)
+
+        assert [
+            (
+                guide.pam_interval.start,
+                guide.pam_strand,
+                guide.sequence,
+                guide.pam,
+            )
+            for guide in guides
+        ] == [
+            (9, "-", "CGCCGCCCCGCGCCCGGGTC", "GGG"),
+            (10, "-", "GCGCCGCCCCGCGCCCGGGT", "CGG"),
+            (22, "+", "GCGGAGGCCCGACCCGGGCG", "CGG"),
+            (23, "+", "CGGAGGCCCGACCCGGGCGC", "GGG"),
+            (24, "+", "GGAGGCCCGACCCGGGCGCG", "GGG"),
+            (27, "+", "GGCCCGACCCGGGCGCGGGG", "CGG"),
+        ]
+
+    @pytest.mark.parametrize(
+        ("target", "nuclease_name"),
+        [
+            ("AGG" + "A" * 20, "SpCas9"),
+            ("A" * 23 + "TTTG", "AsCas12a"),
+        ],
+    )
+    def test_ignores_pams_without_a_complete_protospacer(
+        self,
+        target,
+        nuclease_name,
+    ):
+        assert find_guides(
+            target,
+            get_nuclease(nuclease_name),
+            pam_strand="+",
+        ) == []
+
+    def test_rejects_invalid_nuclease_configuration(self):
+        invalid = Nuclease(
+            name="InvalidOrientation",
+            pam=PAM("NGG", "side"),  # type: ignore[arg-type]
+            cleavage=CleavagePattern(17, 17),
+        )
+
+        with pytest.raises(ValueError, match="PAM orientation"):
+            find_guides("A" * 20 + "AGG", invalid)
 
     @pytest.mark.parametrize("pam_strand", ["+", "-", "both"])
     def test_pam_strand_filter(self, spcas9, pam_strand):

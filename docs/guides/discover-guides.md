@@ -57,6 +57,18 @@ assert guide.cut_site().boundaries == (32, 37)
 assert guide.cut_site().overhang == "5'"
 ```
 
+## Deterministic result order
+
+When both PAM strands are searched, results are interleaved in ascending
+forward-reference PAM order instead of grouping one strand before the other.
+If two PAM intervals begin at the same coordinate, the `+` result comes first.
+This makes plain-string and offset [`SequenceContext`][geneops.target.SequenceContext]
+searches deterministic under the same coordinate contract.
+
+Only PAMs with a complete adjacent protospacer inside the supplied context are
+returned. Discovery validates custom nuclease definitions before searching, so
+an invalid PAM orientation or pattern fails explicitly.
+
 ## Handle ambiguous target bases
 
 Target sequences may contain `N`, which is useful for masked or uncertain bases. A candidate is not returned when its protospacer contains an `N`, because a concrete `Spacer` and `Protospacer` accept only `A`, `C`, `G`, and `T`.

@@ -23,7 +23,7 @@ hide:
   <code>pip install git+https://github.com/ntfargo/geneops.git</code>
 </div>
 
-<p class="geneops-home__release">0.0.7</p>
+<p class="geneops-home__release">0.0.8</p>
 
 </section>
 
